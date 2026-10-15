@@ -1,0 +1,5 @@
+#!/bin/sh
+# pre-commit hook — intentionally minimal.
+# Enforcement is handled by CI and the pre-push gate.
+# Stale lint rules here cause worse bugs than the lint they try to prevent.
+exit 0

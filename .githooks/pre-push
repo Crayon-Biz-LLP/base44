@@ -1,0 +1,18 @@
+#!/bin/sh
+# pre-push hook — .githooks/pre-push
+# Fast gate: lint + typecheck. Bypass: git push --no-verify (emergencies only)
+# Run: git config core.hooksPath .githooks   (one-time setup per repo)
+
+echo "▶ pre-push: lint + typecheck..."
+if ! npm run lint 2>&1; then
+    echo ""
+    echo "  ❌ pre-push rejected: lint failed — see above."
+    exit 1
+fi
+if ! npx tsc --noEmit 2>&1; then
+    echo ""
+    echo "  ❌ pre-push rejected: typecheck failed — see above."
+    exit 1
+fi
+echo "✅ pre-push: clean — push allowed."
+exit 0
