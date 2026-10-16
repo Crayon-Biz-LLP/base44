@@ -7,14 +7,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 import { resolveServeRow } from "@/lib/infra/lineage";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     const serve = await resolveServeRow(id);
     if (!serve) return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -4,7 +4,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { HeroStatInput } from "@/components/ds/HeroStatInput";
 import { resolveIcon } from "@/components/ds/icons";
 
-function entityKey(e: any): string {
+// Shared form-layer types. `FormState` is deliberately loose: the same state
+// backs list forms (flat {fieldKey: value}) and grid forms ({rowKey: {colKey}}).
+export type EntityOption = { key?: string; label?: string };
+export type FieldDef = {
+  key?: string;
+  id?: string;
+  label?: string;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+  min?: number;
+  max?: number;
+  target?: number;
+  options?: string[];
+  visual?: { variant?: string; accent?: string; icon?: string };
+  quickChips?: number[];
+};
+export type FormState = Record<string, unknown>;
+export type SetFormState = React.Dispatch<React.SetStateAction<FormState>>;
+
+// Icons resolve from ICON_SET at render time; createElement keeps the resolved
+// component out of a render-local capitalized binding (static-components rule).
+function FieldIcon({ name, className }: { name: string; className?: string }) {
+  return React.createElement(resolveIcon(name), { className });
+}
+
+function entityKey(e: EntityOption): string {
   const raw = String(e?.key || e?.label || "");
   return raw.trim().toLowerCase();
 }
@@ -13,7 +39,7 @@ function entityKey(e: any): string {
 // or when its key/label actually matches one of the workflow's entities.
 // Plain text/number columns must NEVER be turned into entity dropdowns just
 // because the workflow happens to have an entity list.
-function isEntityColumn(field: any, entities?: any[]): boolean {
+function isEntityColumn(field: FieldDef, entities?: EntityOption[]): boolean {
   if (!entities?.length) return false;
   if (field.type === "entity" || field.type === "name") return true;
   if (field.type && field.type !== "text") return false;
@@ -22,16 +48,15 @@ function isEntityColumn(field: any, entities?: any[]): boolean {
   return entities.some((e) => entityKey(e) === fk);
 }
 
-export function FieldInput({ field, value, onChange, entities }: { field: any, value: string, onChange: (val: string) => void, entities?: any[] }) {
+export function FieldInput({ field, value, onChange, entities }: { field: FieldDef, value: string, onChange: (val: string) => void, entities?: EntityOption[] }) {
   const variant = field.visual?.variant || "standard";
   const accent = field.visual?.accent || "neutral";
   const quickChips = field.quickChips;
 
   if (variant === "hero" || variant === "quick_tap") {
-    const IconComponent = field.visual?.icon ? resolveIcon(field.visual.icon) : null;
     return (
       <HeroStatInput
-        label={field.label}
+        label={field.label ?? ""}
         value={value}
         onChange={e => onChange(e.target.value)}
         chips={quickChips}
@@ -41,7 +66,7 @@ export function FieldInput({ field, value, onChange, entities }: { field: any, v
         }}
         accent={accent}
         required={field.required}
-        icon={IconComponent ? <IconComponent className="w-5 h-5" /> : undefined}
+        icon={field.visual?.icon ? <FieldIcon name={field.visual.icon} className="w-5 h-5" /> : undefined}
       />
     );
   }
@@ -77,8 +102,8 @@ export function FieldInput({ field, value, onChange, entities }: { field: any, v
           className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3.5 py-2.5 font-medium min-h-[48px] shadow-sm focus:border-slate-400 focus:outline-none focus:ring-4 focus:ring-slate-900/5 transition-colors"
         >
           <option value="" disabled>Select {field.label}...</option>
-          {entities?.map((e: any, i: number) => <option key={i} value={e.label}>{e.label}</option>)}
-          {value && !entities?.some((e:any) => e.label === value) && <option value={value}>{value}</option>}
+          {entities?.map((e: EntityOption, i: number) => <option key={i} value={e.label}>{e.label}</option>)}
+          {value && !entities?.some((e: EntityOption) => e.label === value) && <option value={value}>{value}</option>}
           <option value="__add_new__">+ Add New...</option>
         </select>
       </div>

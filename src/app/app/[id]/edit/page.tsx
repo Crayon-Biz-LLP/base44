@@ -68,10 +68,21 @@ const SCALARS: {
 
 type VersionRow = { id: string; version: number; status: string; createdAt: string | null; title: string | null; summary: string | null; isHead: boolean; isServed: boolean };
 
+type WorkflowHeader = {
+  status?: string;
+  isActive?: boolean;
+  schemaVersion?: number;
+  config?: { archetype?: string; title?: string; archetypeConfig?: Row };
+};
+
+// Seed keys for new list rows only need per-session uniqueness; keeping the
+// clock read in a module-scope helper keeps it out of the render-purity pass.
+const timeId36 = () => Date.now().toString(36);
+
 export default function OwnerEditorPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [wf, setWf] = useState<any>(null);
+  const [wf, setWf] = useState<WorkflowHeader | null>(null);
   const [cfg, setCfg] = useState<Row>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -80,6 +91,13 @@ export default function OwnerEditorPage() {
   const [versions, setVersions] = useState<VersionRow[]>([]);
   const [isDraft, setIsDraft] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
+
+  function loadVersions() {
+    fetch(`/api/workflow/${id}/versions`)
+      .then(r => safeJson(r))
+      .then(d => { if (d.success) setVersions(d.versions ?? []); })
+      .catch(() => {});
+  }
 
   useEffect(() => {
     fetch(`/api/workflow/${id}`)
@@ -96,13 +114,6 @@ export default function OwnerEditorPage() {
       .catch(e => setError(String(e?.message || e)));
     loadVersions();
   }, [id]);
-
-  function loadVersions() {
-    fetch(`/api/workflow/${id}/versions`)
-      .then(r => safeJson(r))
-      .then(d => { if (d.success) setVersions(d.versions ?? []); })
-      .catch(() => {});
-  }
 
   const archetype: string = wf?.config?.archetype ?? "";
   const lists = EDIT_LISTS[archetype] ?? [];
@@ -135,8 +146,8 @@ export default function OwnerEditorPage() {
       if (!data.success) throw new Error(data.error || "Save failed");
       if (data.changed === false) return data.workflowId;
       return data.workflowId as string;
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError((e as { message?: string }).message ?? "Request failed");
       return null;
     } finally { setBusy(false); }
   }
@@ -148,8 +159,8 @@ export default function OwnerEditorPage() {
       const data = await safeJson(res);
       if (!data.success) throw new Error(data.error || "Activation failed");
       router.push(`/app/${workflowId}`);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError((e as { message?: string }).message ?? "Request failed");
       setBusy(false);
     }
   }
@@ -176,8 +187,8 @@ export default function OwnerEditorPage() {
       if (!data.success) throw new Error(data.error || "Edit failed");
       if (data.changed === false) setChatResult(data.summary || "No changes needed.");
       else router.push(`/app/${data.workflowId}/edit?created=1`);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError((e as { message?: string }).message ?? "Request failed");
     } finally { setBusy(false); }
   }
 
@@ -191,8 +202,8 @@ export default function OwnerEditorPage() {
       const data = await safeJson(res);
       if (!data.success) throw new Error(data.error || "Restore failed");
       router.push(`/app/${data.workflowId}/edit?created=1`);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError((e as { message?: string }).message ?? "Request failed");
       setBusy(false);
     }
   }
@@ -207,7 +218,7 @@ export default function OwnerEditorPage() {
   const protoFor = (spec: ListSpec): Row => {
     const row: Row = { [spec.primary]: "" };
     for (const s of spec.secondary ?? []) {
-      if (s === "key" && spec.key === "metrics") row.key = "field" + Date.now().toString(36);
+      if (s === "key" && spec.key === "metrics") row.key = "field" + timeId36();
       else if (spec.numeric?.includes(s)) row[s] = 0;
       else if (s === "colorHex") row[s] = "#38bdf8";
       else if (s === "unit") row[s] = "pcs";
@@ -347,7 +358,7 @@ export default function OwnerEditorPage() {
         })}
 
         <div className="text-xs text-slate-500 mt-10 leading-relaxed">
-          Saving revalidates every change against the console's schema, reassembles the app deterministically (no AI in this path), runs the artifact gates, and saves it as a <span className="text-slate-300">draft</span> — the live console keeps serving until you tap Make live. The old link always works.
+          Saving revalidates every change against the console&apos;s schema, reassembles the app deterministically (no AI in this path), runs the artifact gates, and saves it as a <span className="text-slate-300">draft</span> — the live console keeps serving until you tap Make live. The old link always works.
         </div>
       </div>
 

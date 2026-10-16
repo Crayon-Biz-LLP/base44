@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, type ModelMessage, type JSONValue } from "ai";
 import { z } from "zod";
 
 function canonicalizeKey(raw: string): string {
@@ -7,7 +7,7 @@ function canonicalizeKey(raw: string): string {
   return k;
 }
 
-function parseLabelPayload(payload: string): any {
+function parseLabelPayload(payload: string): unknown {
   const trimmed = payload.trim();
   try { return JSON.parse(trimmed); } catch {}
   const fixed = trimmed
@@ -18,7 +18,7 @@ function parseLabelPayload(payload: string): any {
   return undefined;
 }
 
-function fixStringifiedArrays(obj: any): any {
+function fixStringifiedArrays(obj: unknown): unknown {
   if (obj === null || obj === undefined || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) {
     return obj.map(item => {
@@ -33,7 +33,7 @@ function fixStringifiedArrays(obj: any): any {
       return fixStringifiedArrays(item);
     });
   }
-  const result: any = {};
+  const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (key === 'type' && value === 'dropdown') {
       result[key] = 'select';
@@ -49,37 +49,38 @@ function fixStringifiedArrays(obj: any): any {
     }
   }
   
-  if (result.ui_schema) {
-    let oldInt: any = null;
-    if (result.ui_schema.intelligence && (typeof result.ui_schema.intelligence !== 'object' || Array.isArray(result.ui_schema.intelligence))) {
-      oldInt = result.ui_schema.intelligence;
-      delete result.ui_schema.intelligence; // Reset malformed string/array so it gets rebuilt
+  const ui = result["ui_schema"] as Record<string, unknown> | undefined;
+  if (ui) {
+    let oldInt: unknown = null;
+    if (ui.intelligence && (typeof ui.intelligence !== 'object' || Array.isArray(ui.intelligence))) {
+      oldInt = ui.intelligence;
+      delete ui.intelligence; // Reset malformed string/array so it gets rebuilt
     }
 
     // Rescue any key containing 'intelligence'
-    const intKeys = Object.keys(result.ui_schema || {}).filter(k => k.toLowerCase().includes('intelligence'));
+    const intKeys = Object.keys(ui || {}).filter(k => k.toLowerCase().includes('intelligence'));
     intKeys.forEach(k => {
         if (k !== 'intelligence') {
-            if (!result.ui_schema.intelligence) result.ui_schema.intelligence = {};
+            if (!ui.intelligence) ui.intelligence = {};
             // It could be an array of objects
-            if (Array.isArray(result.ui_schema[k])) {
+            if (Array.isArray(ui[k])) {
                 if (!oldInt) oldInt = [];
-                oldInt = oldInt.concat(result.ui_schema[k]);
-            } else if (typeof result.ui_schema[k] === 'object') {
-                Object.assign(result.ui_schema.intelligence, result.ui_schema[k]);
+                oldInt = (oldInt as unknown[]).concat(ui[k]);
+            } else if (typeof ui[k] === 'object') {
+                Object.assign(ui.intelligence as object, ui[k] as object);
             }
-            delete result.ui_schema[k];
+            delete ui[k];
         }
     });
 
-    if (!result.ui_schema.intelligence) {
+    if (!ui.intelligence) {
        const intelligenceKeys = ['entities', 'coverage', 'uniqueness', 'invariants', 'formulas', 'status_matrix', 'threshold_alert', 'sequence', 'deadline', 'analytics', 'repeatable'];
-       const int: any = {};
+       const int: Record<string, unknown> = {};
        let hasInt = false;
        for (const k of intelligenceKeys) {
-          if (result.ui_schema[k]) {
-             int[k] = result.ui_schema[k];
-             delete result.ui_schema[k];
+          if (ui[k]) {
+             int[k] = ui[k];
+             delete ui[k];
              hasInt = true;
           } else if (result[k]) {
              int[k] = result[k];
@@ -104,13 +105,13 @@ function fixStringifiedArrays(obj: any): any {
                        } catch {
                            // If it fails, just put it as an array to let later logic handle it
                            if (!int[k]) int[k] = [];
-                           int[k].push({ label: item.label });
+                           (int[k] as unknown[]).push({ label: item.label });
                            hasInt = true;
                        }
                    } else if (item.label && item.label.toLowerCase() === k) {
 
                       // It's a label marker, we can't do much. But wait, if item has the key?
-                      // Usually the model puts the actual data in result[k] or result.ui_schema[k].
+                      // Usually the model puts the actual data in result[k] or ui[k].
                    }
                 }
              } else if (typeof item === 'string') {
@@ -122,12 +123,12 @@ function fixStringifiedArrays(obj: any): any {
              }
           }
        }
-       if (hasInt) result.ui_schema.intelligence = int;
+       if (hasInt) ui.intelligence = int;
     }
     
     // Normalization logic for flash-lite intelligence strings
-    if (result.ui_schema.intelligence) {
-      const int: any = result.ui_schema.intelligence;
+    if (ui.intelligence) {
+      const int = ui.intelligence as Record<string, unknown>;
 
     // Rescue label-collapsed array items: flash-lite sometimes emits the whole
     // array contents as ONE item like { label: "entities: [{...},{...}]" }.
@@ -137,7 +138,7 @@ function fixStringifiedArrays(obj: any): any {
       const arr = int[k];
       if (!Array.isArray(arr)) continue;
       let hit = false;
-      const recovered: any[] = [];
+      const recovered: unknown[] = [];
       for (const item of arr) {
         if (item && typeof item === 'object' && typeof item.label === 'string') {
           const m = item.label.match(new RegExp('^' + k + '\\s*:\\s*([\\s\\S]+)$', 'i'));
@@ -148,7 +149,7 @@ function fixStringifiedArrays(obj: any): any {
               const list = Array.isArray(parsed) ? parsed : [parsed];
               for (const p of list) {
                 if (p && typeof p === 'object') {
-                  const c: any = {};
+                  const c: Record<string, unknown> = {};
                   for (const [pk, pv] of Object.entries(p)) {
                     if (pk === 'key' && typeof pv === 'string') c.key = canonicalizeKey(pv);
                     else c[pk] = pv;
@@ -170,8 +171,8 @@ function fixStringifiedArrays(obj: any): any {
       if (typeof int.repeatable === 'boolean') {
         int.repeatable = { enabled: int.repeatable };
       } else if (Array.isArray(int.repeatable)) {
-        const rep: any = { enabled: true };
-        int.repeatable.forEach((r: any) => {
+        const rep: Record<string, unknown> = { enabled: true };
+        int.repeatable.forEach((r) => {
           if (r && r.label) {
             const lab = r.label.toLowerCase();
             if (lab.includes('enabled:')) rep.enabled = lab.includes('true');
@@ -186,10 +187,10 @@ function fixStringifiedArrays(obj: any): any {
     
     // Normalize invariants shorthand
     if (Array.isArray(int.invariants)) {
-       const hasShorthand = int.invariants.some((i: any) => i && i.label && !i.leftKey && (i.label.startsWith('op:') || i.label.startsWith('field:')));
+       const hasShorthand = int.invariants.some((i) => i && i.label && !i.leftKey && (i.label.startsWith('op:') || i.label.startsWith('field:')));
        if (hasShorthand) {
-           let newInvariants: any[] = [];
-           let current: any = {};
+           const newInvariants: Record<string, unknown>[] = [];
+           let current: Record<string, unknown> = {};
            for (const i of int.invariants) {
                if (i && i.label) {
                    const lab = i.label;
@@ -222,10 +223,10 @@ function fixStringifiedArrays(obj: any): any {
 
     // Normalize formulas shorthand
     if (Array.isArray(int.formulas)) {
-       const hasShorthand = int.formulas.some((f: any) => f && f.label && !f.targetKey && !f.expression);
+       const hasShorthand = int.formulas.some((f) => f && f.label && !f.targetKey && !f.expression);
        if (hasShorthand) {
-           let newFormulas: any[] = [];
-           let current: any = {};
+           const newFormulas: Record<string, unknown>[] = [];
+           let current: Record<string, unknown> = {};
            for (const f of int.formulas) {
                if (f && f.label) {
                    const lab = f.label;
@@ -258,7 +259,7 @@ function fixStringifiedArrays(obj: any): any {
 
     // Ensure all formulas have valid targetKeys
     if (Array.isArray(int.formulas)) {
-        int.formulas.forEach((f: any) => {
+        int.formulas.forEach((f) => {
             if (f && f.targetKey && f.expression) {
                 if (/[*+\-/\(\)]/.test(f.targetKey) && !/[*+\-/\(\)]/.test(f.expression)) {
                     const temp = f.targetKey;
@@ -281,7 +282,7 @@ function fixStringifiedArrays(obj: any): any {
          int.deadline = { closeBy: "23:59" };
       }
       if (Array.isArray(int.coverage)) {
-         int.coverage = int.coverage.map((c: any) => {
+         int.coverage = int.coverage.map((c) => {
             if (typeof c === 'string') return { scope: 'column', key: c.toLowerCase().replace(/[^a-z0-9]/g, ''), count: 1, label: c, severity: "warning" };
             if (!c.scope) c.scope = 'column';
             if (c.count === undefined) {
@@ -300,6 +301,24 @@ function fixStringifiedArrays(obj: any): any {
 
 import { getModel, isQuotaError, aiKeys } from "./ai";
 
+type GenerateOptions = {
+  messages?: ModelMessage[];
+  prompt?: string;
+  providerOptions?: Record<string, Record<string, JSONValue>>;
+  semanticChecks?: (raw: unknown) => string[];
+  bestEffortSemantic?: boolean;
+  [k: string]: unknown;
+};
+
+type ValidationCause = {
+  name?: string;
+  message?: string;
+  value?: unknown;
+  text?: string;
+  errors?: { path?: (string | number)[]; message: string }[];
+  cause?: unknown;
+};
+
 /**
  * Raised when a Zod-valid extraction still violates referential integrity
  * (phantom keys). The repair loop feeds the semantic errors back to the model
@@ -311,11 +330,14 @@ export class SemanticFailure extends Error {
   }
 }
 
-export async function generateWithRepair<T>(options: any, schema: z.ZodSchema<T>, maxRetries = 3): Promise<T> {
+export async function generateWithRepair<T>(options: GenerateOptions, schema: z.ZodSchema<T>, maxRetries = 3): Promise<T> {
   let attempt = 0;
-  const messages = options.messages ? [...options.messages] : [];
-  if (options.prompt && messages.length === 0) {
-    messages.push({ role: 'user', content: options.prompt });
+  const messages: ModelMessage[] = options.messages ? [...options.messages] : [];
+  // `prompt` is folded into messages; drop it from the passthrough so the
+  // generateObject call matches the messages-form Prompt branch (not both).
+  const { prompt: promptInput, ...genOptions } = options;
+  if (promptInput && messages.length === 0) {
+    messages.push({ role: 'user', content: promptInput });
   }
   
   let quotaAttempts = 0;
@@ -347,10 +369,9 @@ export async function generateWithRepair<T>(options: any, schema: z.ZodSchema<T>
       const forceWire = process.env.AI_STRUCTURED_OUTPUTS === "1";
       const useStructuredOutputs = forceWire || attempt === 0;
       const { object } = await generateObject({
-        ...options,
+        ...genOptions,
         model: getModel(quotaAttempts),
-        schema,
-        prompt: undefined,
+        schema: schema as z.ZodSchema<unknown>,
         messages,
         ...(useStructuredOutputs ? {} : {
           providerOptions: {
@@ -363,27 +384,28 @@ export async function generateWithRepair<T>(options: any, schema: z.ZodSchema<T>
         try { const fs = await import("node:fs"); fs.default.writeFileSync(`/tmp/gen-attempt-${attempt}-${Date.now()}.json`, JSON.stringify(object, null, 2)); } catch {}
       }
       return await semanticFeedback(object);
-    } catch (e: any) {
+    } catch (e) {
+      const err = e as { name?: string; message?: string; value?: unknown; cause?: unknown };
       if (e instanceof SemanticFailure) {
         attempt++;
-        if (attempt >= maxRetries && (options as { bestEffortSemantic?: boolean }).bestEffortSemantic) {
+        if (attempt >= maxRetries && options.bestEffortSemantic) {
           console.warn(`[Semantic Guardrails] ${maxRetries} retries exhausted; hand-off to deterministic normalization...`);
           return e.value as T;
         }
         continue;
       }
-      const validationCause = e instanceof z.ZodError ? e : (e.cause || e);
+      const validationCause = (e instanceof z.ZodError ? e : (err.cause || err)) as ValidationCause;
       const isValidationError = e instanceof z.ZodError || 
                               validationCause?.name?.includes("Validation") || 
                               validationCause?.name?.includes("Parse") ||
-                              e.name?.includes("NoObjectGeneratedError");
+                              err.name?.includes("NoObjectGeneratedError");
                               
       if (isValidationError) {
         // Attempt to auto-fix stringified arrays
-        const rawValue = validationCause.value || e.value;
-        let errorMessage = validationCause.message || e.message;
+        const rawValue = validationCause.value || err.value;
+        let errorMessage = validationCause.message || err.message || "";
         if (validationCause && Array.isArray(validationCause.errors)) {
-          errorMessage = validationCause.errors.map((err: any) => `- Path ${err.path?.join('.')} : ${err.message}`).join('\n');
+          errorMessage = validationCause.errors.map((issue) => `- Path ${issue.path?.join('.')} : ${issue.message}`).join('\n');
         }
 
         if (rawValue) {
@@ -397,21 +419,22 @@ export async function generateWithRepair<T>(options: any, schema: z.ZodSchema<T>
             // Re-validate against the schema
             const parsed = schema.parse(fixed);
             return await semanticFeedback(parsed);
-          } catch (fixErr: any) {
+          } catch (fixErr) {
+            const fErr = fixErr as { name?: string; message?: string; cause?: unknown };
             if (fixErr instanceof SemanticFailure) {
               attempt++;
-              if (attempt >= maxRetries && (options as { bestEffortSemantic?: boolean }).bestEffortSemantic) {
+              if (attempt >= maxRetries && options.bestEffortSemantic) {
                 console.warn(`[Semantic Guardrails] ${maxRetries} retries exhausted in auto-fix path; hand-off to deterministic normalization...`);
                 return fixed as T;
               }
               continue;
             }
             // Auto-fix failed or validation still failed, continue with repair loop
-            const fixCause = fixErr instanceof z.ZodError ? fixErr : (fixErr.cause || fixErr);
+            const fixCause = (fixErr instanceof z.ZodError ? fixErr : (fErr.cause || fErr)) as ValidationCause;
             if (fixCause && Array.isArray(fixCause.errors)) {
-              errorMessage = fixCause.errors.map((err: any) => `- Path ${err.path?.join('.')} : ${err.message}`).join('\n');
+              errorMessage = fixCause.errors.map((issue) => `- Path ${issue.path?.join('.')} : ${issue.message}`).join('\n');
             } else {
-              errorMessage = fixCause.message || fixErr.message || errorMessage;
+              errorMessage = fixCause.message || fErr.message || errorMessage;
             }
           }
         }
@@ -448,7 +471,7 @@ export async function generateWithRepair<T>(options: any, schema: z.ZodSchema<T>
       // mode (attempt 1+), which has no wire schema to reject. Bounded by the
       // retry budget; genuine provider failures still throw after retries.
       if (attempt === 0) {
-        console.warn(`[Mode Fallback] attempt 0 failed (${e?.name || "error"}) — retrying in JSON mode`);
+        console.warn(`[Mode Fallback] attempt 0 failed (${err.name || "error"}) — retrying in JSON mode`);
         attempt++;
         continue;
       }

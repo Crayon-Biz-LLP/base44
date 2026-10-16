@@ -445,13 +445,23 @@ async function sync(){
 // edit auto-persists a full snapshot through the same submit bridge.
 function applyLoaded(records){
   if (!records || !records.length) return;
+  var cells = {};
   records.forEach(function(r){
     if (!r || !r.purpose) return;
     var st = SLOTS.indexOf(r.slot); if (st < 0) return;
-    var key = (r.resource || '') + '|' + st; // business key: one booking per resource+slot
-    var b = state.bookings.find(function(x){ return (x.r + '|' + x.st) === key; });
-    if (b){ b.p = r.purpose; }
-    else state.bookings.push({ p: r.purpose, r: r.resource || RESOURCES[0], st: st });
+    var res = r.resource || RESOURCES[0];
+    var key = res + '||' + st;
+    if (!cells[key]) cells[key] = { res: res, st: st, ps: [] };
+    cells[key].ps.push(r.purpose);
+  });
+  Object.keys(cells).forEach(function(key){
+    var c = cells[key];
+    var locals = [];
+    state.bookings.forEach(function(x, i){ if (((x.r || '') + '||' + x.st) === key) locals.push(i); });
+    for (var i = 0; i < c.ps.length; i++){
+      if (i < locals.length) state.bookings[locals[i]].p = c.ps[i];
+      else state.bookings.push({ p: c.ps[i], r: c.res, st: c.st });
+    }
   });
   saveLocal();
 }

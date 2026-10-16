@@ -8,15 +8,16 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 import { activateLineageHead } from "@/lib/infra/lineage";
 import { recordWorkflowChange, configHashOf } from "@/lib/infra/audit";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1);
     if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -12,15 +12,16 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, workflows } from "@/db/schema";
 import { and, eq, gte, inArray } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 import { buildOverviewRow, sortOverviewRows } from "@/lib/domain/overview";
 import { buildActivityFeed } from "@/lib/domain/activity-feed";
 import type { ArchetypeId } from "@/lib/infra/archetypes";
 
 export async function GET() {
   try {
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     const heads = await db
       .select()

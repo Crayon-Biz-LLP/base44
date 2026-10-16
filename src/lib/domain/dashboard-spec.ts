@@ -90,7 +90,7 @@ export function resolveDateRange(range: DateRange): { start: number; end: number
 }
 
 /** Generates a sensible default dashboard based on workflows */
-export function buildDefaultSpec(workflows: any[]): DashboardSpec {
+export function buildDefaultSpec(workflows: { id: string; primitiveType?: string; config: { title: string } }[]): DashboardSpec {
   const widgets: Widget[] = [];
   
   workflows.forEach(w => {

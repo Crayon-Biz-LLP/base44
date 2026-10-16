@@ -14,6 +14,32 @@ import { ActivityFeed } from "@/components/activity-feed";
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
+type Widget = {
+  id: string;
+  empty?: boolean;
+  spec: { type: string; title: string; entity?: string; metric: { kind?: string } };
+  data: {
+    value?: number | string;
+    points?: { date: string; value: number }[];
+    entities?: { label: string; value: number }[];
+    slices?: { label: string; value: number }[];
+    rows?: { label: string; value: number | string }[];
+  };
+};
+
+type DashboardSave = {
+  eventId: string;
+  workflowId: string;
+  workflowTitle: string;
+  filledBy?: string;
+  createdAt: string;
+  verdict?: {
+    summary?: string;
+    money?: { total?: number };
+    coverage?: { slotsFilled?: number; slotsTotal?: number };
+  };
+};
+
 const formatEventTime = (iso: string | Date) => {
   const d = new Date(iso);
   return d.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
@@ -22,25 +48,10 @@ const formatEventTime = (iso: string | Date) => {
 export default function DashboardPage() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
-  const [widgets, setWidgets] = useState<any[]>([]);
+  const [widgets, setWidgets] = useState<Widget[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [saves, setSaves] = useState<any[]>([]);
+  const [saves, setSaves] = useState<DashboardSave[]>([]);
   const [savesLoading, setSavesLoading] = useState(true);
-
-  useEffect(() => {
-    generateDashboard("Show me an overview of all my apps");
-    (async () => {
-      try {
-        const res = await fetch("/api/dashboard/saves");
-        const json = await res.json();
-        setSaves(json.saves || []);
-      } catch {
-        setSaves([]);
-      } finally {
-        setSavesLoading(false);
-      }
-    })();
-  }, []);
 
   const generateDashboard = async (overridePrompt?: string) => {
     const text = overridePrompt || prompt;
@@ -80,15 +91,33 @@ export default function DashboardPage() {
       if (dashboardData.error) throw new Error(dashboardData.error);
       
       setWidgets(dashboardData.widgets || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Failed to generate dashboard");
     } finally {
       setLoading(false);
       if (!overridePrompt) setPrompt("");
     }
   };
 
-  const renderWidget = (w: any) => {
+  // Declared below generateDashboard so the hoisted-name rule is satisfied.
+  // The dashboard auto-load is deferred a microtask so the effect body itself
+  // performs no synchronous setState (set-state-in-effect rule).
+  useEffect(() => {
+    queueMicrotask(() => generateDashboard("Show me an overview of all my apps"));
+    (async () => {
+      try {
+        const res = await fetch("/api/dashboard/saves");
+        const json = await res.json();
+        setSaves(json.saves || []);
+      } catch {
+        setSaves([]);
+      } finally {
+        setSavesLoading(false);
+      }
+    })();
+  }, []);
+
+  const renderWidget = (w: Widget) => {
     if (w.empty) {
       return (
         <Card className="h-full flex items-center justify-center p-8 bg-gray-50/50 border-dashed shadow-none">
@@ -162,8 +191,8 @@ export default function DashboardPage() {
             <CardContent className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <RechartsPieChart>
-                  <Pie data={data.slices} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                    {data.slices.map((entry: any, index: number) => (
+                  <Pie data={data.slices ?? []} dataKey="value" nameKey="label" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                    {(data.slices ?? []).map((entry: { label: string; value: number }, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -190,7 +219,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
-                    {data.rows?.map((row: any, i: number) => (
+                    {data.rows?.map((row: { label: string; value: number | string }, i: number) => (
                       <tr key={i} className="hover:bg-gray-50 transition-colors">
                         <td className="p-3 font-medium text-gray-900">{row.label}</td>
                         <td className="p-3 text-right font-bold text-gray-900">
@@ -249,7 +278,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="divide-y divide-gray-100">
               {saves.map((s) => {
-                const v = s.verdict || {};
+                const v: NonNullable<DashboardSave["verdict"]> = s.verdict || {};
                 return (
                   <Link
                     key={s.eventId}

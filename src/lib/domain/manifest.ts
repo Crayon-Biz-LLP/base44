@@ -354,13 +354,16 @@ export function canonicalKey(node: { key?: string; id?: string; label?: string }
   return deriveKey(node?.label ?? "");
 }
 
-export function ensureCanonicalKeys(manifest: WorkflowConfig | Manifest): any {
-  const result: any = { ...manifest };
+type KeyedNode = { key?: string; id?: string; label?: string } & Record<string, unknown>;
+
+export function ensureCanonicalKeys(manifest: WorkflowConfig | Manifest): Manifest {
+  const result = { ...manifest } as Record<string, unknown>;
   const keyMap: Record<string, string> = {};
 
   if (result.layout_type === "list") {
-    if (result.fields) {
-      result.fields = result.fields.map((f: any) => {
+    const fields = result.fields as KeyedNode[] | undefined;
+    if (fields) {
+      result.fields = fields.map((f) => {
         const k = canonicalKey(f);
         if (f.label) keyMap[f.label.toLowerCase()] = k;
         if (f.key) keyMap[f.key.toLowerCase()] = k;
@@ -368,16 +371,18 @@ export function ensureCanonicalKeys(manifest: WorkflowConfig | Manifest): any {
       });
     }
   } else if (result.layout_type === "grid") {
-    if (result.rows) {
-      result.rows = result.rows.map((r: any) => {
+    const rows = result.rows as KeyedNode[] | undefined;
+    if (rows) {
+      result.rows = rows.map((r) => {
         const k = canonicalKey(r);
         if (r.label) keyMap[r.label.toLowerCase()] = k;
         if (r.key) keyMap[r.key.toLowerCase()] = k;
         return { ...r, key: k };
       });
     }
-    if (result.columns) {
-      result.columns = result.columns.map((c: any) => {
+    const columns = result.columns as (KeyedNode | string)[] | undefined;
+    if (columns) {
+      result.columns = columns.map((c) => {
         if (typeof c === "string") {
           const k = deriveKey(c);
           keyMap[c.toLowerCase()] = k;
@@ -386,12 +391,12 @@ export function ensureCanonicalKeys(manifest: WorkflowConfig | Manifest): any {
         const k = (typeof c.key === "string" && KEY_RE.test(c.key)) ? c.key : deriveKey(c.label ?? "");
         if (c.label) keyMap[c.label.toLowerCase()] = k;
         if (c.key) keyMap[c.key.toLowerCase()] = k;
-        const mappedCol = { ...c, key: k };
-        if (mappedCol.targets) {
+        const mappedCol: KeyedNode = { ...c, key: k };
+        if (mappedCol.targets && typeof mappedCol.targets === "object") {
           const newTargets: Record<string, number> = {};
-          for (const [tKey, tVal] of Object.entries(mappedCol.targets)) {
+          for (const [tKey, tVal] of Object.entries(mappedCol.targets as Record<string, number>)) {
              const resolvedKey = keyMap[tKey.toLowerCase()] || deriveKey(tKey);
-             newTargets[resolvedKey] = tVal as number;
+             newTargets[resolvedKey] = tVal;
           }
           mappedCol.targets = newTargets;
         }
@@ -402,52 +407,72 @@ export function ensureCanonicalKeys(manifest: WorkflowConfig | Manifest): any {
 
   // Remap intelligence keys
   if (result.intelligence) {
-    const int = result.intelligence;
+    const int = result.intelligence as Record<string, unknown>;
     const resolveKey = (k: string) => keyMap[k.toLowerCase()] || deriveKey(k);
-    
+
     if (int.coverage) {
-      int.coverage = int.coverage.map((c: any) => ({ ...c, key: resolveKey(c.key) }));
+      int.coverage = (int.coverage as Record<string, unknown>[]).map((c) => ({ ...c, key: resolveKey(c.key as string) }));
     }
     if (int.invariants) {
-      int.invariants = int.invariants.map((i: any) => ({
+      int.invariants = (int.invariants as Record<string, unknown>[]).map((i) => ({
         ...i,
-        leftKey: resolveKey(i.leftKey),
-        rightKey: i.rightKey ? resolveKey(i.rightKey) : undefined
+        leftKey: resolveKey(i.leftKey as string),
+        rightKey: i.rightKey ? resolveKey(i.rightKey as string) : undefined
       }));
     }
     if (int.formulas) {
-      int.formulas = int.formulas.map((f: any) => ({
+      int.formulas = (int.formulas as Record<string, unknown>[]).map((f) => ({
         ...f,
-        targetKey: resolveKey(f.targetKey)
+        targetKey: resolveKey(f.targetKey as string)
         // expression rewriting is harder, assume LLM got it or user used keys
       }));
     }
     if (int.status_matrix) {
-      int.status_matrix = int.status_matrix.map((s: any) => ({ ...s, columnKey: resolveKey(s.columnKey) }));
+      int.status_matrix = (int.status_matrix as Record<string, unknown>[]).map((s) => ({ ...s, columnKey: resolveKey(s.columnKey as string) }));
     }
     if (int.threshold_alert) {
-      int.threshold_alert = int.threshold_alert.map((t: any) => ({ ...t, target: resolveKey(t.target) }));
+      int.threshold_alert = (int.threshold_alert as Record<string, unknown>[]).map((t) => ({ ...t, target: resolveKey(t.target as string) }));
     }
     if (int.sequence) {
-      int.sequence = int.sequence.map((s: any) => ({ ...s, key: resolveKey(s.key) }));
+      int.sequence = (int.sequence as Record<string, unknown>[]).map((s) => ({ ...s, key: resolveKey(s.key as string) }));
     }
     if (int.analytics) {
-      int.analytics = int.analytics.map((a: any) => ({ ...a, sourceKey: a.sourceKey ? resolveKey(a.sourceKey) : undefined }));
+      int.analytics = (int.analytics as Record<string, unknown>[]).map((a) => ({ ...a, sourceKey: a.sourceKey ? resolveKey(a.sourceKey as string) : undefined }));
     }
   }
 
-  return result;
+  return result as unknown as Manifest;
 }
 
-export function migrateCubeToNative(config: any): Manifest {
+interface LegacyCubeValue { key?: string; label?: string }
+interface LegacyCubeDim { key?: string; values?: LegacyCubeValue[] }
+interface LegacyCubeRecord {
+  cell: Record<string, unknown>;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+  target?: number;
+}
+interface LegacyCubeConfig {
+  layout_type?: string;
+  view?: string;
+  description?: string;
+  subtitle?: string;
+  entryMode?: string;
+  dimensions?: LegacyCubeDim[];
+  records?: LegacyCubeRecord[];
+}
+
+export function migrateCubeToNative(config: LegacyCubeConfig): Manifest {
   if (config.layout_type === "list" || config.layout_type === "grid") {
-    return ensureCanonicalKeys(config) as Manifest;
+    return ensureCanonicalKeys(config as unknown as Manifest);
   }
   
   if (config.layout_type === "cube") {
     if (config.view === "list") {
       // Cube view:list -> ListManifest
-      const list: any = {
+      const list: { layout_type: "list"; description?: string; subtitle?: string; fields: Record<string, unknown>[] } = {
         layout_type: "list",
         description: config.description,
         subtitle: config.subtitle,
@@ -469,10 +494,10 @@ export function migrateCubeToNative(config: any): Manifest {
           target: r.target
         });
       }
-      return list as ListManifest;
+      return list as unknown as ListManifest;
     } else {
       // Cube view:table/cards/calendar -> GridManifest
-      const grid: any = {
+      const grid: { layout_type: "grid"; description?: string; subtitle?: string; entryMode: "shared" | "personal"; rows: Record<string, unknown>[]; columns: { key: string; label: string; targets: Record<string, number> }[] } = {
         layout_type: "grid",
         description: config.description,
         subtitle: config.subtitle,
@@ -487,8 +512,8 @@ export function migrateCubeToNative(config: any): Manifest {
       if (dims.length > 0) {
         const rowDim = dims[0];
         const rowVals = rowDim.values || [];
-        grid.rows = rowVals.map((v: any) => ({
-          key: deriveKey(v.label),
+        grid.rows = rowVals.map((v) => ({
+          key: deriveKey(v.label as string),
           label: v.label,
           type: "number"
         }));
@@ -498,9 +523,9 @@ export function migrateCubeToNative(config: any): Manifest {
         if (remainingDims.length > 0) {
           const colSet = new Set<string>();
           for (const r of records) {
-            const colLabelParts = remainingDims.map((d: any) => {
-              const valKey = r.cell[d.key];
-              const valLabel = d.values?.find((v:any) => v.key === valKey)?.label || valKey;
+            const colLabelParts = remainingDims.map((d) => {
+              const valKey = r.cell[d.key as string];
+              const valLabel = d.values?.find((v) => v.key === valKey)?.label || (valKey as string);
               return valLabel;
             });
             const colLabel = colLabelParts.join(" ");
@@ -515,9 +540,9 @@ export function migrateCubeToNative(config: any): Manifest {
             
             // Apply targets if any
             if (r.target !== undefined) {
-              const rowKey = deriveKey(rowDim.values?.find((v:any) => v.key === r.cell[rowDim.key])?.label || "");
+              const rowKey = deriveKey(rowDim.values?.find((v) => v.key === r.cell[rowDim.key as string])?.label || "");
               const colKey = deriveKey(colLabel);
-              const col = grid.columns.find((c: any) => c.key === colKey);
+              const col = grid.columns.find((c) => c.key === colKey);
               if (col && rowKey) {
                 col.targets[rowKey] = r.target;
               }
@@ -525,7 +550,7 @@ export function migrateCubeToNative(config: any): Manifest {
           }
         }
       }
-      return grid as GridManifest;
+      return grid as unknown as GridManifest;
     }
   }
   
@@ -533,6 +558,6 @@ export function migrateCubeToNative(config: any): Manifest {
   return {
     layout_type: "list",
     fields: []
-  } as ListManifest;
+  } as unknown as ListManifest;
 }
 

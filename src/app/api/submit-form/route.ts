@@ -7,6 +7,29 @@ import { evaluateFormula, checkInvariant } from "@/lib/domain/math";
 import { computeEventVerdict } from "@/lib/domain/verdict";
 import { getAppAccess } from "@/lib/infra/app-auth";
 
+type SubmitColumn = { key?: string; label?: string; target?: number | string; targets?: Record<string, unknown>; [k: string]: unknown };
+type SubmitRow = { key?: string; id?: string; label?: string; target?: number | string; primitive?: string; [k: string]: unknown };
+type SubmitField = { key?: string; id?: string; label?: string; type?: string; primitive?: string; [k: string]: unknown };
+type SubmitFormula = { targetKey: string; expression: string; scope?: "column" | "row" };
+type SubmitInvariant = { leftKey: string; op: string; rightKey?: string; rightValue?: number | string; errorMessage?: string; severity?: "warning" | "block" };
+type SubmitIntelligence = {
+  coverage?: { scope: "column" | "row" | "list"; key: string; count: number; label?: string; severity?: "warning" | "block" }[];
+  uniqueness?: { scope: "row" | "grid"; label?: string; severity?: "warning" | "block" };
+  formulas?: SubmitFormula[];
+  invariants?: SubmitInvariant[];
+  [k: string]: unknown;
+};
+type SubmitLogic = { formulas?: SubmitFormula[]; invariants?: SubmitInvariant[]; [k: string]: unknown };
+type SubmitSchema = {
+  layout_type?: string;
+  columns?: SubmitColumn[];
+  rows?: SubmitRow[];
+  fields?: SubmitField[];
+  intelligence?: SubmitIntelligence;
+  logic?: SubmitLogic;
+  [k: string]: unknown;
+};
+
 export async function POST(req: Request) {
   try {
     const { workflowId, layout_type, actuals, ai_corrections, filledBy, payload } = await req.json();
@@ -20,7 +43,7 @@ export async function POST(req: Request) {
     if (workflowResult.length === 0) return NextResponse.json({ error: "Form not found" }, { status: 404 });
     
     const workflow = workflowResult[0];
-    const schema = (workflow.config as Record<string, unknown>).schema as any;
+    const schema = (workflow.config as Record<string, unknown>).schema as SubmitSchema;
     const tenantId = workflow.tenantId;
 
     // Archetype consoles are PIN-gated products: their state changes require a
@@ -40,7 +63,7 @@ export async function POST(req: Request) {
       locationId = newLoc[0].id;
     }
 
-    let finalPayload: any;
+    let finalPayload!: Record<string, unknown>;
 
     if (payload && payload.records) {
       // V2 Cube Payload
@@ -57,7 +80,7 @@ export async function POST(req: Request) {
         // Form sends actuals as { [rowKey]: { [colKey]: value } }
         // We evaluate logic and build payload per column key.
         const gridActuals = actuals as Record<string, Record<string, unknown>>;
-        const colKeys = schema.columns?.map((c: any) => c.key || c.label) || [];
+        const colKeys = schema.columns?.map((c) => c.key || c.label).filter((k): k is string => typeof k === "string") || [];
         // Accept actuals keyed by rowKey OR rowLabel (generated artifacts vary).
         const rowActual = (row: { key?: string; id?: string; label?: string }) => {
           const key = row.key || row.id;
@@ -73,7 +96,7 @@ export async function POST(req: Request) {
           for (const cov of int.coverage) {
             if (cov.scope === "column") {
               let filled = 0;
-              for (const row of schema.rows) {
+              for (const row of (schema.rows ?? [])) {
                 if (rowActual(row)?.[cov.key]) filled++;
               }
               if (filled < cov.count && cov.severity === "block") {
@@ -85,7 +108,7 @@ export async function POST(req: Request) {
         
         // Uniqueness checks
         if (int.uniqueness && int.uniqueness.scope === "row") {
-          for (const row of schema.rows) {
+          for (const row of (schema.rows ?? [])) {
             const seen = new Set();
             for (const colKey of colKeys) {
               const val = rowActual(row)?.[colKey];
@@ -101,8 +124,8 @@ export async function POST(req: Request) {
 
         for (const colKey of colKeys) {
           const scope: Record<string, number> = {};
-          for (const row of schema.rows) {
-            const rowKey = row.key || row.id || row.label;
+          for (const row of (schema.rows ?? [])) {
+            const rowKey = row.key || row.id || row.label || "";
             scope[rowKey] = Number(rowActual(row)?.[colKey]) || 0;
           }
 
@@ -131,22 +154,22 @@ export async function POST(req: Request) {
             }
           }
 
-          for (const row of schema.rows) {
-            const rowKey = row.key || row.id || row.label;
+          for (const row of (schema.rows ?? [])) {
+            const rowKey = row.key || row.id || row.label || "";
             const target = row.target;
             const actual = scope[rowKey] !== undefined && scope[rowKey] !== 0 ? scope[rowKey] : rowActual(row)?.[colKey];
 
             if (actual === undefined || actual === "") continue;
 
-            const entry: any = rowAcc.get(rowKey) || { row: rowKey, label: row.label, target: target || '-', percent_achieved: null, primitive: row.primitive };
+            const entry: Record<string, unknown> = rowAcc.get(rowKey) || { row: rowKey, label: row.label, target: target || '-', percent_achieved: null, primitive: row.primitive };
             entry[colKey] = actual;
             rowAcc.set(rowKey, entry);
           }
         }
 
         // Flatten in schema.rows order; compute percent_achieved
-        for (const row of schema.rows) {
-          const rowKey = row.key || row.id || row.label;
+        for (const row of (schema.rows ?? [])) {
+          const rowKey = row.key || row.id || row.label || "";
           const rec = rowAcc.get(rowKey);
           if (!rec) continue;
           const valueKeys = Object.keys(rec).filter(k => !["row", "label", "target", "percent_achieved", "primitive"].includes(k));
@@ -164,7 +187,7 @@ export async function POST(req: Request) {
                 colTargetsSum += cellTarget;
                 // col key in rec might be col.key or deriveKey(col.label)
                 const cKey = col.key || (col.label ? col.label.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+(.)/g, (_: string, c: string) => c.toUpperCase()).replace(/^(.)/, (c: string) => c.toLowerCase()) : '');
-                const val = rec[cKey] !== undefined ? rec[cKey] : rec[col.label];
+                const val = rec[cKey] !== undefined ? rec[cKey] : rec[col.label ?? ""];
                 if (val !== undefined && val !== "") {
                   colActualsSum += Number(val) || 0;
                 }
@@ -188,8 +211,8 @@ export async function POST(req: Request) {
       } else if (layout_type === "list") {
         // Process Flat List Form
         const scope: Record<string, number> = {};
-        for (const field of schema.fields) {
-          const fieldKey = field.key || field.id || field.label;
+        for (const field of (schema.fields ?? [])) {
+          const fieldKey = field.key || field.id || field.label || "";
           if (field.type === "number" || field.type === "currency") {
             scope[fieldKey] = Number(actuals[fieldKey]) || 0;
           }
@@ -219,8 +242,8 @@ export async function POST(req: Request) {
           }
         }
 
-        for (const field of schema.fields) {
-          const fieldKey = field.key || field.id || field.label;
+        for (const field of (schema.fields ?? [])) {
+          const fieldKey = field.key || field.id || field.label || "";
           if (actuals[fieldKey] !== undefined || scope[fieldKey] !== undefined) {
             calculatedPayload.push({
               label: field.label,

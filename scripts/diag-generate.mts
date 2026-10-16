@@ -110,14 +110,14 @@ try {
   console.log(`SUCCESS [${modelId}] in ${Date.now() - t0}ms`);
   console.log(JSON.stringify(object, null, 2).slice(0, 900));
 } catch (e: unknown) {
-  const err = e as { name?: string; message?: string; cause?: any; value?: unknown; text?: string };
+  const err = e as { name?: string; message?: string; cause?: unknown; value?: unknown; text?: string };
   console.log(`FAILED [${modelId}] in ${Date.now() - t0}ms: ${err.name} — ${(err.message || "").slice(0, 300)}`);
-  const cause = err.cause ?? err;
+  const cause = (err.cause ?? err) as { cause?: { errors?: { path?: (string | number)[]; message: string }[] }; errors?: { path?: (string | number)[]; message: string }[] };
   if (err.value !== undefined) console.log("RAW VALUE >>>\n" + JSON.stringify(err.value, null, 2));
   else if (err.text) console.log("RAW TEXT >>>\n" + String(err.text).slice(0, 2000));
   const inner = cause?.cause ?? cause;
   if (inner?.errors) {
     console.log("VALIDATION ERRORS >>>");
-    console.log(inner.errors.map((x: { path?: (string | number)[]; message: string }) => `- ${x.path?.join(".")}: ${x.message}`).join("\n"));
+    console.log(inner.errors.map((x) => `- ${x.path?.join(".")}: ${x.message}`).join("\n"));
   }
 }

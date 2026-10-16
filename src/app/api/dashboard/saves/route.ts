@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, workflows } from "@/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const tenantId = await getSessionTenantId();
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const guard = await requireOwnerTenant();
+  if (!guard.ok) return guard.response;
+  const tenantId = guard.tenantId;
 
   const recentEvents = await db
     .select({

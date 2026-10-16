@@ -363,6 +363,7 @@ function render(){
   });
   if (!ENTRY) renderDist(stCounts);
   if (ENTRY) return; // entry view: card only, no fleet-wide numbers
+  document.getElementById('kpiN').innerText = state.assets.length;
   document.getElementById('kpiRun').innerText = running;
   document.getElementById('kpiDue').innerText = due;
   document.getElementById('kpiMeter').innerText = meterN ? Math.round(meterSum / meterN).toLocaleString() : '—';

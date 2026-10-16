@@ -47,8 +47,8 @@ test("GridForm personal mode - matches canonical row key against display staff n
         layout_type: "grid",
         entryMode: "personal",
         rows: [
-          { key: "bhuvana", label: "Bhuvana" },
-          { key: "shamla", label: "Shamla" },
+          { key: "bhuvana", label: "Bhuvana", type: "number", required: true },
+          { key: "shamla", label: "Shamla", type: "number", required: true },
         ],
         columns: [{ key: "mc", label: "MC", type: "number", target: 20 }],
         intelligence: {},

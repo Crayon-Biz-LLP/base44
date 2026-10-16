@@ -23,12 +23,12 @@ const ACCENT_HEX: Record<string, string> = {
 // Deterministic default accent: the first accent declared on any field visual
 // (grid columns / list fields). Falls back to sky blue.
 export function deriveAccentHex(schema: Manifest): string {
-  const candidate = schema as any;
+  const candidate = schema as { columns?: unknown; fields?: unknown; rows?: unknown };
   const groups = [candidate?.columns, candidate?.fields, candidate?.rows];
   for (const group of groups) {
     if (!Array.isArray(group)) continue;
     for (const item of group) {
-      const hex = ACCENT_HEX[item?.visual?.accent];
+      const hex = ACCENT_HEX[(item as { visual?: { accent?: string } })?.visual?.accent ?? ""];
       if (hex) return hex;
     }
   }

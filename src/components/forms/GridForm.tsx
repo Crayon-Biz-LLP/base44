@@ -1,30 +1,44 @@
 import React, { useState } from "react";
-import { FieldInput } from "./FieldInput";
+import { FieldInput, type FormState, type SetFormState } from "./FieldInput";
 import { Masthead } from "@/components/ds/Masthead";
 import { QuickChipGroup } from "@/components/ds/QuickChipGroup";
-import { deriveChips } from "@/lib/domain/manifest";
+import { deriveChips, type GridManifest } from "@/lib/domain/manifest";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
-export function GridForm({ schema, formState, setFormState, selectedPersona }: { schema: any, formState: any, setFormState: any, selectedPersona?: string }) {
+type GridColumn = NonNullable<GridManifest["columns"]>[number];
+type GridRow = GridManifest["rows"][number];
+
+export function GridForm({ schema, formState, setFormState, selectedPersona }: { schema: GridManifest, formState: FormState, setFormState: SetFormState, selectedPersona?: string }) {
   const { rows = [], columns = [], intelligence, description } = schema;
   const isPersonal = schema.entryMode === "personal";
   const repeatable = intelligence?.repeatable?.enabled;
 
   const [rowKeys, setRowKeys] = useState<string[]>(() => {
-    const initialKeys = rows.map((r: any) => r.key || r.label);
+    const initialKeys = rows.map((r) => (r.key || r.label) as string);
     if (repeatable && initialKeys.length === 0) initialKeys.push(`line_0`);
     return initialKeys;
   });
 
-  const getColTarget = (rowKey: string, col: any) => {
+  const getColTarget = (rowKey: string, col: GridColumn) => {
     if (col.targets && col.targets[rowKey] !== undefined) return col.targets[rowKey];
     return col.target;
   };
 
-  const getRowTarget = (row: any) => row?.target;
+  const getRowTarget = (row: { target?: number; label?: string } | undefined) => row?.target;
+
+  const cellValue = (rowKey: string, colKey: string): string =>
+    (formState[rowKey] as Record<string, string> | undefined)?.[colKey] ?? "";
+
+  const setCell = (rowKey: string, colKey: string, val: string) =>
+    setFormState((prev) => {
+      const next = { ...prev } as Record<string, Record<string, string>>;
+      if (!next[rowKey]) next[rowKey] = {};
+      next[rowKey][colKey] = val;
+      return next;
+    });
 
   return (
     <Card className="rounded-2xl shadow-sm p-4 space-y-4">
@@ -34,7 +48,7 @@ export function GridForm({ schema, formState, setFormState, selectedPersona }: {
           className="border-none pb-0 mb-0 px-2 pt-2"
         />
       )}
-      {intelligence?.sequence && intelligence.sequence.map((seq:any) => (
+      {intelligence?.sequence && intelligence.sequence.map((seq) => (
          <div key={seq.key} className="px-2">
             <Badge variant="secondary" className="font-mono text-sm px-3 py-1">
               {seq.key.toUpperCase()}: {seq.prefix || ""}{seq.start}
@@ -47,7 +61,7 @@ export function GridForm({ schema, formState, setFormState, selectedPersona }: {
             <TableHead className="p-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">
               {repeatable ? "Item" : "Name / Date"}
             </TableHead>
-            {columns.map((c: any, i: number) => (
+            {columns.map((c: GridColumn, i: number) => (
               <TableHead key={i} className="p-4 font-semibold text-slate-500 text-xs uppercase tracking-wider min-w-[150px]">
                 {c.label}{" "}
                 {c.target && (
@@ -57,14 +71,15 @@ export function GridForm({ schema, formState, setFormState, selectedPersona }: {
                 )}
               </TableHead>
             ))}
-            {rows.some((r:any) => getRowTarget(r)) && (
+            {rows.some((r: GridRow) => getRowTarget(r)) && (
                <TableHead className="p-4 font-semibold text-slate-500 text-xs uppercase tracking-wider">Target</TableHead>
             )}
           </TableRow>
         </TableHeader>
         <TableBody>
           {rowKeys.map((rowKey: string, rIdx: number) => {
-            const rowDef = repeatable ? { label: `Line ${rIdx+1}` } : rows.find((r:any) => (r.key || r.label) === rowKey);
+            const rowDefRow = repeatable ? undefined : rows.find((r: GridRow) => (r.key || r.label) === rowKey);
+            const rowDef = repeatable ? { label: `Line ${rIdx+1}` } : rowDefRow;
             // personal mode: staff identity ("Bhuvana") may differ from the
             // canonicalized row key ("bhuvana") — match label OR key, case-insensitively.
             if (isPersonal && selectedPersona) {
@@ -77,12 +92,12 @@ export function GridForm({ schema, formState, setFormState, selectedPersona }: {
             return (
               <TableRow key={rIdx}>
                 <TableCell className="p-4 font-semibold text-slate-800 whitespace-normal">{rowDef?.label}</TableCell>
-                {columns.map((col: any, cIdx: number) => {
-                  const colKey = col.key || col.label;
+                {columns.map((col: GridColumn, cIdx: number) => {
+                  const colKey = (col.key || col.label) as string;
 
                   const target = getColTarget(rowKey, col);
-                  const isTextType = rowDef && !rowDef.target && !col.target;
-                  const fieldDef = { ...col, target, type: col.type || rowDef?.type || (isTextType ? "text" : "number"), required: true };
+                  const isTextType = rowDef && !getRowTarget(rowDef) && !col.target;
+                  const fieldDef = { ...col, target, type: col.type || rowDefRow?.type || (isTextType ? "text" : "number"), required: true };
                   const chips = target && !getRowTarget(rowDef) ? deriveChips(fieldDef) : undefined;
 
                   return (
@@ -90,19 +105,12 @@ export function GridForm({ schema, formState, setFormState, selectedPersona }: {
                       <FieldInput
                         field={fieldDef}
                         entities={intelligence?.entities}
-                        value={formState[rowKey]?.[colKey] ?? ""}
-                        onChange={(val) => {
-                          setFormState((prev: any) => {
-                            const next = { ...prev };
-                            if (!next[rowKey]) next[rowKey] = {};
-                            next[rowKey][colKey] = val;
-                            return next;
-                          });
-                        }}
+                        value={cellValue(rowKey, colKey)}
+                        onChange={(val) => setCell(rowKey, colKey, val)}
                       />
-                      {target && formState[rowKey]?.[colKey] && (
+                      {target && cellValue(rowKey, colKey) && (
                         <div className="absolute top-1.5 right-5 text-[10px] font-mono text-slate-400">
-                          {formState[rowKey][colKey]} / {target}
+                          {cellValue(rowKey, colKey)} / {target}
                         </div>
                       )}
                       {chips && (
@@ -110,14 +118,7 @@ export function GridForm({ schema, formState, setFormState, selectedPersona }: {
                           chips={chips}
                           className="mt-2"
                           ariaLabel={`Quick add for ${col.label}`}
-                          onTap={(chip) => {
-                            setFormState((prev: any) => {
-                              const next = { ...prev };
-                              if (!next[rowKey]) next[rowKey] = {};
-                              next[rowKey][colKey] = String(chip);
-                              return next;
-                            });
-                          }}
+                          onTap={(chip) => setCell(rowKey, colKey, String(chip))}
                         />
                       )}
                     </TableCell>
@@ -138,12 +139,7 @@ export function GridForm({ schema, formState, setFormState, selectedPersona }: {
                              const first = columns[0];
                              const firstKey = first?.key || first?.label;
                              if (!firstKey) return;
-                             setFormState((prev: any) => {
-                               const next = { ...prev };
-                               if (!next[rowKey]) next[rowKey] = {};
-                               next[rowKey][firstKey] = String(chip);
-                               return next;
-                             });
+                             setCell(rowKey, firstKey, String(chip));
                            }}
                          />
                        );

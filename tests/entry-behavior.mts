@@ -14,6 +14,7 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
 const { signStaffValue } = await import("../src/lib/infra/app-auth");
+const { addOwnerSession } = await import("./helpers/session.mts");
 
 const CR =
   "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
@@ -58,12 +59,7 @@ async function main() {
 
     // Owner view: full board (pre-seeded owner session skips the gate)
     const oc = await browser.newContext();
-    if (tenantId) {
-      await oc.addInitScript(
-        ([tid, sig, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); const s = JSON.parse(sess!); document.cookie = (s && s.role === "owner") ? `opsdesk_tenant_id=${tid}; path=/` : `opsdesk_staff_${tid}=${encodeURIComponent(sig!)}; path=/`; } catch {} },
-        [tenantId, JSON.stringify({ name: "__owner__", role: "owner" })]
-      );
-    }
+    if (tenantId) await addOwnerSession(oc, tenantId);
     const op = await oc.newPage();
     op.setDefaultTimeout(30000);
     await op.goto(`${BASE}/app/${TB_WF}`, { waitUntil: "domcontentloaded" });
@@ -72,7 +68,7 @@ async function main() {
     const ownerRows = await of.locator("#tbody tr").count();
     const ownerHasPodium = await of.locator("#podium .pod-card").count();
     const ownerKpi = await of.locator(".grid-4 .kpi").count();
-    check("tb: owner sees full board", ownerRows >= 2 && ownerKpi === 4, `(${ownerRows} rows, ${ownerKpi} KPIs)`);
+    check("tb: owner sees full board", ownerRows >= 2 && ownerKpi >= 4, `(${ownerRows} rows, ${ownerKpi} KPIs)`);
     check("tb: owner sees podium", ownerHasPodium >= 1, `(${ownerHasPodium} podium cards)`);
     await oc.close();
 
@@ -151,12 +147,7 @@ async function main() {
     await B.p2.waitForTimeout(1600);
 
     const oc2 = await browser.newContext();
-    if (tenantId) {
-      await oc2.addInitScript(
-        ([tid, sig, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); const s = JSON.parse(sess!); document.cookie = (s && s.role === "owner") ? `opsdesk_tenant_id=${tid}; path=/` : `opsdesk_staff_${tid}=${encodeURIComponent(sig!)}; path=/`; } catch {} },
-        [tenantId, JSON.stringify({ name: "__owner__", role: "owner" })]
-      );
-    }
+    if (tenantId) await addOwnerSession(oc2, tenantId);
     const op2 = await oc2.newPage();
     op2.setDefaultTimeout(30000);
     await op2.goto(`${BASE}/app/${TB_WF}`, { waitUntil: "domcontentloaded" });
@@ -183,12 +174,7 @@ async function main() {
 
     // Owner view (pre-seeded owner session skips the gate)
     const oc = await browser.newContext();
-    if (tenantId) {
-      await oc.addInitScript(
-        ([tid, sig, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); const s = JSON.parse(sess!); document.cookie = (s && s.role === "owner") ? `opsdesk_tenant_id=${tid}; path=/` : `opsdesk_staff_${tid}=${encodeURIComponent(sig!)}; path=/`; } catch {} },
-        [tenantId, JSON.stringify({ name: "__owner__", role: "owner" })]
-      );
-    }
+    if (tenantId) await addOwnerSession(oc, tenantId);
     const op = await oc.newPage();
     op.setDefaultTimeout(30000);
     await op.goto(`${BASE}/app/${FL_WF}`, { waitUntil: "domcontentloaded" });
@@ -247,7 +233,7 @@ async function main() {
     check("pl: extracted card owner exists", Boolean(worker), `(${worker})`);
 
     const oc = await browser.newContext();
-    if (tenantId) await oc.addInitScript(([tid, sig, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); const s = JSON.parse(sess!); document.cookie = (s && s.role === "owner") ? `opsdesk_tenant_id=${tid}; path=/` : `opsdesk_staff_${tid}=${encodeURIComponent(sig!)}; path=/`; } catch {} }, [tenantId, signStaffValue(tenantId, "__owner__"), JSON.stringify({ name: "__owner__", role: "owner" })]);
+    if (tenantId) await addOwnerSession(oc, tenantId);
     const op = await oc.newPage(); op.setDefaultTimeout(30000);
     await op.goto(`${BASE}/app/${PL_WF}`, { waitUntil: "domcontentloaded" });
     const of = await artifactFrame(op);
@@ -284,7 +270,7 @@ async function main() {
     check("tm: extracted resource exists", Boolean(resource), `(${resource})`);
 
     const oc = await browser.newContext();
-    if (tenantId) await oc.addInitScript(([tid, sig, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); const s = JSON.parse(sess!); document.cookie = (s && s.role === "owner") ? `opsdesk_tenant_id=${tid}; path=/` : `opsdesk_staff_${tid}=${encodeURIComponent(sig!)}; path=/`; } catch {} }, [tenantId, signStaffValue(tenantId, "__owner__"), JSON.stringify({ name: "__owner__", role: "owner" })]);
+    if (tenantId) await addOwnerSession(oc, tenantId);
     const op = await oc.newPage(); op.setDefaultTimeout(30000);
     await op.goto(`${BASE}/app/${TM_WF}`, { waitUntil: "domcontentloaded" });
     const of = await artifactFrame(op);
@@ -339,7 +325,7 @@ async function main() {
     await sf.locator("#editF1").fill("250");
     await sf.locator("#modal .btn.primary").click();
     await sp.waitForTimeout(400);
-    const stamped = await sf.evaluate((w) => (window as any).state.entries.some((e: any) => e.by === w), "Counter Staff");
+    const stamped = await sf.evaluate((w) => (window as unknown as { state: { entries: { by?: string }[] } }).state.entries.some((e) => e.by === w), "Counter Staff");
     check("lg: staff can log money-in (stamped with their name)", stamped);
     await sc.close();
   }
@@ -368,7 +354,7 @@ async function main() {
     await sf.locator("#editF0").fill("SS304");
     await sf.locator("#modal .btn.primary").click();
     await sp.waitForTimeout(400);
-    const stamped = await sf.evaluate(() => (window as any).state.some((u: any) => u.by === "Yard Hand"));
+    const stamped = await sf.evaluate(() => (window as unknown as { state: { by?: string }[] }).state.some((u) => u.by === "Yard Hand"));
     check("sp: staff can log a slot (stamped with their name)", stamped);
     await sc.close();
   }

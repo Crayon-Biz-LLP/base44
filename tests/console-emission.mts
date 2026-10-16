@@ -22,7 +22,7 @@ function scriptOf(html: string): string {
 function gate(name: string, html: string) {
   writeFileSync("/tmp/console-emission-check.js", scriptOf(html));
   try { execSync("node --check /tmp/console-emission-check.js", { stdio: "pipe" }); check(name, true); }
-  catch (e: any) { check(name, false, (e.stderr?.toString() ?? String(e)).slice(0, 300)); }
+  catch (e) { check(name, false, ((e as { stderr?: { toString(): string } }).stderr?.toString() ?? String(e)).slice(0, 300)); }
 }
 
 gate("pipeline emits valid JS", assemblePipeline({
@@ -30,7 +30,7 @@ gate("pipeline emits valid JS", assemblePipeline({
   stages: [{ label: "Received" }, { label: "Diagnosis" }, { label: "Repair" }, { label: "Delivered" }],
   items: [{ title: "Bike A", stageIdx: 1, owner: "Ravi" }, { title: "Bike B", stageIdx: 0, owner: "" }],
   searchHint: "search", advisory: "tip",
-} as any));
+} as never));
 
 gate("ledger emits valid JS", assembleLedger({
   productName: "ShopLedger", logoText: "SL", tagline: "t", accentHex: "#34d399", dark: true,
@@ -44,7 +44,7 @@ gate("ledger emits valid JS", assembleLedger({
     { label: "Wholesale", amount: 1200, type: "Receipt" },
     { label: "Transport", amount: 200, type: "Payment" },
   ],
-} as any));
+} as never));
 
 gate("temporal emits valid JS", assembleTemporal({
   productName: "DentFlow", logoText: "DF", tagline: "t", accentHex: "#38bdf8", dark: true,
@@ -56,7 +56,7 @@ gate("temporal emits valid JS", assembleTemporal({
     { purpose: "Extraction", resource: "Chair 2" },
     { purpose: "Checkup", resource: "Chair 2" },
   ],
-} as any));
+} as never));
 
 gate("fleet emits valid JS", assembleFleet({
   productName: "FleetPulse", logoText: "FP", tagline: "t", accentHex: "#f97316", dark: true,
@@ -70,14 +70,14 @@ gate("fleet emits valid JS", assembleFleet({
   ],
   readings: [{ asset: "Truck-001", value: 15400 }, { asset: "Truck-002", value: 9000 }],
   logs: [{ asset: "Truck-001", label: "Trip to Erode", delta: 320 }],
-} as any));
+} as never));
 
 gate("target-board emits valid JS", assembleTargetBoard({
   productName: "MetricPulse", logoText: "MP", tagline: "t", accentHex: "#38bdf8", dark: true,
   people: [{ name: "Bhuvana" }, { name: "Srimathi" }],
   metrics: [{ key: "new", label: "New", target: 3 }],
   searchHint: "search", advisory: "tip",
-} as any));
+} as never));
 
 gate("spatial emits valid JS", assembleConsole({
   productName: "LaserRack", logoText: "LR", tagline: "t", accentHex: "#38bdf8", dark: true,
@@ -95,7 +95,7 @@ gate("spatial emits valid JS", assembleConsole({
   features: { tonnage: true },
   audit: { thresholdTons: 3.5 },
   balanceBadge: true,
-} as any));
+} as never));
 
 console.log(`\n${passes} passed, ${failures} failed`);
 if (failures) process.exit(1);

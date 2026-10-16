@@ -4,6 +4,10 @@ import { events, workflows, tenants } from "@/db/schema";
 import { eq, gte, lte, and } from "drizzle-orm";
 import { translateRecords } from "@/lib/infra/translators";
 
+type DigestColumn = { key?: string; label?: string; target?: number | string };
+type DigestSchema = { entryPersonaDimension?: string; columns?: DigestColumn[]; [k: string]: unknown };
+type CubeRecord = { cell?: Record<string, string>; value?: number | string; type?: string; target?: number | string };
+
 export async function POST() {
   try {
     const today = new Date();
@@ -54,12 +58,12 @@ export async function POST() {
       const extractStats = (evList: Record<string, unknown>[], isToday: boolean) => {
         for (const ev of evList) {
           const raw: unknown = ev.payload;
-          const config: any = workflowsMap.get(ev.workflowId as string) || {};
+          const config: { schema?: DigestSchema } = (workflowsMap.get(ev.workflowId as string) as { schema?: DigestSchema }) || {};
           const schema = config.schema || {};
           
           let gridPayload: Record<string, unknown>[] = [];
           let listPayload: Record<string, unknown>[] = [];
-          let recordsPayload: any[] = [];
+          let recordsPayload: CubeRecord[] = [];
           
           if (Array.isArray(raw)) gridPayload = raw;
           else if (raw && typeof raw === "object") {
@@ -78,8 +82,8 @@ export async function POST() {
              for (const rec of recordsPayload) {
                 // Find performer
                 let performer = ev.filledBy as string;
-                if (!performer && personaDimKey && rec.cell[personaDimKey]) {
-                   performer = rec.cell[personaDimKey];
+                if (!performer && personaDimKey && rec.cell?.[personaDimKey]) {
+                   performer = rec.cell?.[personaDimKey] ?? performer;
                 }
                 if (!performer) performer = "Unknown";
                 
@@ -97,7 +101,7 @@ export async function POST() {
                       staffStats[performer].totalActual += val;
                       
                       if (val < Number(rec.target)) {
-                         const cellName = Object.values(rec.cell).join(" ");
+                         const cellName = Object.values(rec.cell ?? {}).join(" ");
                          missedTargets.push(`${performer}: ${cellName} (${val}/${rec.target})`);
                       }
                    }
@@ -138,7 +142,7 @@ export async function POST() {
                   if (col.target && Number(col.target) > 0) {
                     hasColTargets = true;
                     const cKey = col.key || (col.label ? col.label.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+(.)/g, (_: string, c: string) => c.toUpperCase()).replace(/^(.)/, (c: string) => c.toLowerCase()) : '');
-                    const act = Number(row[cKey] !== undefined ? row[cKey] : row[col.label]) || 0;
+                    const act = Number(row[cKey] !== undefined ? row[cKey] : row[col.label ?? ""]) || 0;
                     const tgt = Number(col.target);
                     if (act < tgt && performer) {
                       missedTargets.push(`${performer}: ${col.label} (${act}/${tgt})`);

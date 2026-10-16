@@ -2,31 +2,18 @@
 // the real production sandbox like a user: click empty slot → book → apply →
 // cell fills → utilization recomputes → double-book → conflict banner fires →
 // resolve → banner closes → spotlight → persistence → sync.
-import { chromium, type Frame, type Page } from "playwright-core";
+import {
+  BASE,
+  addOwnerSession,
+  artifactFrame,
+  createChecker,
+  launchBrowser,
+  requireEnv,
+  tenantOf,
+} from "./helpers/session.mts";
 
-const CR =
-  "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-const BASE = "http://localhost:3000";
-const WORKFLOW_ID = process.env.TM_WF || "";
-
-let failures = 0;
-let passes = 0;
-function check(name: string, ok: boolean, extra = "") {
-  if (ok) { passes++; console.log(`  ok  ${name} ${extra}`); }
-  else { failures++; console.log(`  FAIL  ${name} ${extra}`); }
-}
-
-async function artifactFrame(page: Page): Promise<Frame> {
-  for (let i = 0; i < 30; i++) {
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    if (frame) {
-      const ok = await frame.evaluate(() => !!document.body).catch(() => false);
-      if (ok) return frame;
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error("artifact iframe unavailable");
-}
+const WORKFLOW_ID = requireEnv("TM_WF");
+const { check, finish } = createChecker();
 
 // Globals inside the sandboxed artifact iframe (declared for TS only).
 declare const RESOURCES: string[];
@@ -34,21 +21,13 @@ declare const state: { bookings: { p: string; r: string; st: number }[] };
 
 async function main() {
   console.log("=== Temporal behavioral verification (headless Chromium) ===");
-  if (!WORKFLOW_ID) throw new Error("Set TM_WF=<workflow id>");
-  const browser = await chromium.launch({ executablePath: CR, headless: true });
+  const browser = await launchBrowser();
 
-  const wfRes = await fetch(`${BASE}/api/workflow/${WORKFLOW_ID}`);
-  const wf = await wfRes.json();
-  const tenantId = wf?.workflow?.tenantId as string | undefined;
+  const tenantId = await tenantOf(WORKFLOW_ID);
   check("workflow resolves", Boolean(tenantId));
 
   const context = await browser.newContext();
-  if (tenantId) {
-    await context.addInitScript(
-      ([tid, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); } catch {} },
-      [tenantId, JSON.stringify({ name: "E2E", role: "owner" })]
-    );
-  }
+  if (tenantId) await addOwnerSession(context, tenantId);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
 
@@ -89,36 +68,42 @@ async function main() {
   const utilAfter = await f.locator("#kpiUtil").innerText();
   check("utilization recomputed", utilBefore !== utilAfter, `${utilBefore} → ${utilAfter}`);
 
-  // 5. Double-book: edit an existing booking onto the same resource+slot →
-  //    conflict badge + banner fire.
-  const firstBooked = f.locator(".bcell.filled").first();
-  await firstBooked.click();
+  // 5. Double-book: move a SEEDED booking onto OUR booking's resource+slot →
+  //    conflict count rises by exactly one and the banner fires. (The fixture
+  //    itself seeds some conflicts, so we measure the DELTA, not an absolute.)
+  const conflictsBefore = Number(await f.locator("#kpiConf").innerText());
+  const seedPos = await f.evaluate(([r, s]) => {
+    const mine = RESOURCES[Number(r)];
+    const b = state.bookings.find((x: { r: string; st: number }) => !(x.r === mine && x.st === Number(s)));
+    return b ? { r: b.r, st: b.st } : null;
+  }, [ri, si] as (string | null)[]);
+  const seedCell = f.locator(`.bcell.filled:not([data-ri="${ri}"][data-si="${si}"])`).first();
+  await seedCell.click();
   await f.locator("#modal.open").waitFor({ state: "visible" });
-  await f.locator("#resSel").selectOption(await f.evaluate(([r, s]) => {
-    const b = state.bookings.find((x: { p: string }) => x.p === "E2E — test booking");
-    return b ? b.r : RESOURCES[Number(r)];
-  }, [ri, si] as (string | null)[]));
-  await f.locator("#slotSel").selectOption(await f.evaluate(([r, s]) => {
-    const b = state.bookings.find((x: { p: string }) => x.p === "E2E — test booking");
-    return String(b ? b.st : Number(s));
-  }, [ri, si] as (string | null)[]));
+  await f.locator("#resSel").selectOption({ index: Number(ri) });
+  await f.locator("#slotSel").selectOption(String(si));
   await f.locator("#modal .btn.primary").click();
   await page.waitForTimeout(300);
-  const conflicts = await f.locator("#kpiConf").innerText();
-  check("double-booking detected", Number(conflicts) >= 1, `(KPI ${conflicts})`);
+  const conflictsAfter = Number(await f.locator("#kpiConf").innerText());
+  check("double-booking detected (+1)", conflictsAfter === conflictsBefore + 1, `(${conflictsBefore} → ${conflictsAfter})`);
   const conflictCells = await f.locator(".bcell.conflict").count();
   check("conflict cell styled red", conflictCells >= 1, `(${conflictCells})`);
   const bannerOpen = await f.locator("#auditBanner.open").count();
   const bannerText = bannerOpen ? await f.locator("#auditText").innerText() : "";
   check("collision banner fires", bannerOpen === 1 && /double-booked/.test(bannerText), JSON.stringify(bannerText.slice(0, 60)));
 
-  // 6. Resolve: move the edited booking elsewhere → banner closes.
-  await firstBooked.click();
-  await f.locator("#modal.open").waitFor({ state: "visible" });
-  await f.locator("#slotSel").selectOption({ index: (await f.locator("#slotSel option").count()) - 1 });
-  await f.locator("#modal .btn.primary").click();
-  await page.waitForTimeout(300);
-  check("banner closes after resolution", (await f.locator("#auditBanner.open").count()) === 0 && (await f.locator("#kpiConf").innerText()) === "0");
+  // 6. Resolve: move the displaced booking back to its seed position → conflicts drop back.
+  if (seedPos) {
+    await f.locator(`.bcell.filled[data-ri="${ri}"][data-si="${si}"]`).first().click();
+    await f.locator("#modal.open").waitFor({ state: "visible" });
+    await f.locator("#resSel").selectOption(String(seedPos.r));
+    await f.locator("#slotSel").selectOption(String(seedPos.st));
+    await f.locator("#modal .btn.primary").click();
+    await page.waitForTimeout(300);
+  }
+  const conflictsResolved = Number(await f.locator("#kpiConf").innerText());
+  check("conflicts drop after resolution", conflictsResolved === conflictsBefore, `(${conflictsAfter} → ${conflictsResolved})`);
+  check("banner state follows remaining conflicts", (await f.locator("#auditBanner.open").count()) === (conflictsResolved > 0 ? 1 : 0), `(banner open=${await f.locator("#auditBanner.open").count()}, conflicts=${conflictsResolved})`);
 
   // 7. Spotlight: type a purpose fragment → non-matching cells dim, matching glows.
   await f.locator("#search").fill("E2E");
@@ -164,12 +149,11 @@ async function main() {
     if (projAfter === projBefore) break;
     await page.waitForTimeout(400);
   }
-  check("Engine 2: bookings restored from server ledger after reload", projAfter === projBefore, projAfter.slice(0, 90));
+  check("Engine 2: bookings restored from server ledger after reload", projAfter === projBefore, `before=${projBefore.slice(0, 110)} after=${projAfter.slice(0, 110)}`);
   check("Engine 2: sync-state chip present after reload", (await f2.locator("#syncState").count()) === 1);
 
   await browser.close();
-  console.log(`\n${passes} passed, ${failures} failed`);
-  process.exit(failures > 0 ? 1 : 0);
+  finish();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

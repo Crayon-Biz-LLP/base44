@@ -38,8 +38,8 @@ export function AlertContactCard() {
       const data = await res.json();
       if (!data.success) throw new Error(data.error || "Save failed");
       setStatus("Saved — daily alerts will use this.");
-    } catch (e: any) {
-      setStatus(e.message);
+    } catch (e) {
+      setStatus((e as { message?: string }).message ?? "Save failed");
     } finally {
       setBusy(false);
     }

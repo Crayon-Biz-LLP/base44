@@ -1,10 +1,11 @@
 import React from "react";
-import { FieldInput } from "./FieldInput";
+import { FieldInput, type FormState, type SetFormState } from "./FieldInput";
 import { Masthead } from "@/components/ds/Masthead";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import type { ListManifest } from "@/lib/domain/manifest";
 
-export function ListForm({ schema, formState, setFormState }: { schema: any, formState: any, setFormState: any }) {
+export function ListForm({ schema, formState, setFormState }: { schema: ListManifest, formState: FormState, setFormState: SetFormState }) {
   const int = schema.intelligence;
 
   return (
@@ -16,18 +17,19 @@ export function ListForm({ schema, formState, setFormState }: { schema: any, for
         />
       )}
 
-      {schema.fields?.map((f: any, i: number) => {
+      {schema.fields?.map((f, i: number) => {
         const key = f.key || f.label;
         const isHero = f.visual?.variant === "hero" || f.visual?.variant === "quick_tap";
+        const target = (f as { target?: number }).target;
 
         return (
           <div key={i} className="space-y-2">
             {!isHero && (
               <label className="flex justify-between items-center text-sm font-semibold text-slate-700">
                 <span>{f.label} {f.required && <span className="text-red-500">*</span>}</span>
-                {f.target && (
+                {target && (
                   <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 font-bold">
-                    🎯 {f.target}
+                    🎯 {target}
                   </Badge>
                 )}
               </label>
@@ -35,8 +37,8 @@ export function ListForm({ schema, formState, setFormState }: { schema: any, for
             <FieldInput
               field={f}
               entities={int?.entities}
-              value={formState[key] || ""}
-              onChange={(val) => setFormState((prev: any) => ({ ...prev, [key]: val }))}
+              value={(formState[key] as string) || ""}
+              onChange={(val) => setFormState((prev) => ({ ...prev, [key]: val }))}
             />
           </div>
         );

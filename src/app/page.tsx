@@ -40,7 +40,7 @@ export default async function HomePage() {
               <Card className="h-full hover:border-indigo-500 hover:shadow-md transition-all">
                 <CardHeader>
                   <MoonStar className="w-8 h-8 text-indigo-600 mb-2 group-hover:scale-110 transition-transform" />
-                  <CardTitle>3. Tonight's Verdict</CardTitle>
+                  <CardTitle>3. Tonight&apos;s Verdict</CardTitle>
                   <CardDescription>The nightly ops scorecard — what happened today, what needs your eyes before you sleep.</CardDescription>
                 </CardHeader>
               </Card>

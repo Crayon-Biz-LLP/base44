@@ -10,7 +10,7 @@ export async function POST(req: Request) {
 
     // In a full implementation, persist this to a tenant_staff table
     return NextResponse.json({ success: true, name });
-  } catch (error: any) {
+  } catch {
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

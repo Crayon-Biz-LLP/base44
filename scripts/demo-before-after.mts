@@ -71,7 +71,7 @@ for (const p of pairs) {
   const script = p.after.slice(p.after.indexOf("<script>") + 8, p.after.lastIndexOf("</script>"));
   writeFileSync("/tmp/console-syntax-check.js", script);
   try { execSync("node --check /tmp/console-syntax-check.js", { stdio: "pipe" }); }
-  catch (e: any) { console.error(`FAIL ${tag}: syntax gate\n`, e.stderr?.toString()); failures++; continue; }
+  catch (e) { console.error(`FAIL ${tag}: syntax gate\n`, (e as { stderr?: { toString(): string } }).stderr?.toString()); failures++; continue; }
   console.log(`  PASS ${tag} (script identical ×${nBefore}, reduced-motion on, syntax OK)`);
 }
 if (failures) { console.error(`\n${failures} pair(s) failed — no gallery written`); process.exit(1); }

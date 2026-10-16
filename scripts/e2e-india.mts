@@ -57,7 +57,7 @@ async function main() {
       const { db } = await import("../src/db/index");
       const { tenants, workflows, events } = await import("../src/db/schema");
       const { eq } = await import("drizzle-orm");
-      const ins = await db.insert(tenants).values({ name: b.name, accessCode: OWNER_PIN, staffPin: STAFF_PIN, tier: "starter" } as any).returning();
+      const ins = await db.insert(tenants).values({ name: b.name, accessCode: OWNER_PIN, staffPin: STAFF_PIN, tier: "starter" }).returning();
       const tenantId = ins[0].id;
 
       // 2. One-shot generation through the production router
@@ -105,7 +105,7 @@ async function main() {
 
       await sleep(300);
       const st = await (await fetch(`${BASE}/api/app-state/${wfId}`, { headers: cookieHeaders })).json();
-      const roundTrip = Array.isArray(st.records) && st.records.some((r: any) => r?.probe === "e2e-india" && r?.business === b.name);
+      const roundTrip = Array.isArray(st.records) && st.records.some((r: { probe?: string; business?: string }) => r?.probe === "e2e-india" && r?.business === b.name);
 
       const evRows = await db.select().from(events).where(eq(events.workflowId, wfId));
       const evOk = evRows.length >= 1 && evRows[0].status === "confirmed" && evRows[0].filledBy === "E2E Staff";
@@ -119,10 +119,11 @@ async function main() {
       console.log(`    owner: ${BASE}/app/${wfId}   (PIN ${OWNER_PIN})`);
       console.log(`    staff: ${BASE}/app/${wfId}?as=staff   (PIN ${STAFF_PIN})`);
       lines.push(`${ok ? "✓" : "✗"} ${b.name} — ${gen.archetype} — owner ${BASE}/app/${wfId} — staff ${BASE}/app/${wfId}?as=staff`);
-    } catch (e: any) {
+    } catch (e) {
       fail++;
-      console.log(`✗ ${b.name}: ${String(e?.message || e).slice(0, 160)}`);
-      lines.push(`✗ ${b.name} — FAILED: ${String(e?.message || e).slice(0, 100)}`);
+      const emsg = (e as { message?: string })?.message;
+      console.log(`✗ ${b.name}: ${String(emsg || e).slice(0, 160)}`);
+      lines.push(`✗ ${b.name} — FAILED: ${String(emsg || e).slice(0, 100)}`);
     }
   }
 

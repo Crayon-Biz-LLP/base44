@@ -16,19 +16,28 @@ const CASES = [
   { name: "Patel Farm Equipment Rental", prompt: "I rent out tractors and tillers in Anand, Gujarat. 6 machines. Track running hours and service. Operators Bhavesh and Dipak log the hours." },
 ];
 
+type Ac = {
+  features?: unknown;
+  field3?: { label?: string };
+  serviceUnit?: string;
+  assets?: { lastService?: number }[];
+  resources?: { name?: string }[];
+  slots?: unknown[];
+};
+
 for (const c of CASES) {
   const route = pickArchetype(c.prompt);
   try {
     const gen = await generateConsoleForPrompt(c.prompt);
-    const ac: any = gen.config;
+    const ac = gen.config as Ac;
     writeFileSync(`/tmp/fix-${route.id}-${Date.now()}.html`, gen.html);
     let extra = "";
     if (gen.archetype === "spatial") extra = `features=${JSON.stringify(ac.features)} zoneUnit=${(ac.field3?.label || "").match(/\(([^)]+)\)/)?.[1] || "mm"}`;
-    if (gen.archetype === "fleet") extra = `serviceUnit=${ac.serviceUnit} lastService=[${(ac.assets || []).map((a: any) => a.lastService).join(",")}] overdue-clock=${gen.html.includes("OVERDUE")} markServiced=${gen.html.includes("markServiced")}`;
-    if (gen.archetype === "temporal") extra = `resources=[${(ac.resources || []).map((r: any) => r.name).join(",")}] slots=${(ac.slots || []).length}`;
+    if (gen.archetype === "fleet") extra = `serviceUnit=${ac.serviceUnit} lastService=[${(ac.assets || []).map((a) => a.lastService).join(",")}] overdue-clock=${gen.html.includes("OVERDUE")} markServiced=${gen.html.includes("markServiced")}`;
+    if (gen.archetype === "temporal") extra = `resources=[${(ac.resources || []).map((r) => r.name).join(",")}] slots=${(ac.slots || []).length}`;
     console.log(`✓ ${c.name} → ${gen.archetype} (${gen.productName}) | ${extra}`);
-  } catch (e: any) {
-    console.log(`✗ ${c.name}: ${String(e?.message || e).slice(0, 120)}`);
+  } catch (e) {
+    console.log(`✗ ${c.name}: ${String((e as { message?: string })?.message || e).slice(0, 120)}`);
   }
 }
 process.exit(0);

@@ -22,6 +22,9 @@ const only = async (fn: () => Promise<void>) => {
   await fn();
 };
 
+type WfListItem = { id: string; isActive?: boolean; config?: { archetype?: string; archetypeConfig?: unknown } };
+type VersionItem = { version: number; isHead?: boolean };
+
 let cookie = "";
 async function login() {
   const res = await fetch(`${BASE}/api/auth/login`, {
@@ -49,7 +52,7 @@ test("console lifecycle", () => only(async () => {
   let wfId = WF;
   if (!wfId) {
     const list = await getJson("/api/workflow");
-    const pick = (list.workflows ?? []).find((w: any) => w.config?.archetype && w.config?.archetypeConfig);
+    const pick = (list.workflows ?? []).find((w: WfListItem) => w.config?.archetype && w.config?.archetypeConfig);
     if (!pick) throw new Error("No archetype console found for the tenant (and LC_WF unset)");
     wfId = pick.id;
   }
@@ -62,7 +65,7 @@ test("console lifecycle", () => only(async () => {
 
   const renameTo = `${String(base.productName ?? cfg0.title ?? "Console")} LC`;
   const listBefore = await getJson("/api/workflow");
-  const beforeVisible = (listBefore.workflows ?? []).some((w: any) => w.id === head0.id);
+  const beforeVisible = (listBefore.workflows ?? []).some((w: WfListItem) => w.id === head0.id);
 
   // --- 1. Edit → draft, head untouched -------------------------------------
   const editRes = await fetch(`${BASE}/api/workflow/${head0.id}/edit`, {
@@ -75,7 +78,7 @@ test("console lifecycle", () => only(async () => {
 
   const draftRow = (await getJson(`/api/workflow/${edit.workflowId}`)).workflow;
   const headStill = (await getJson(`/api/workflow/${head0.id}`)).workflow;
-  const draftVisible = ((await getJson("/api/workflow")).workflows ?? []).some((w: any) => w.id === edit.workflowId);
+  const draftVisible = ((await getJson("/api/workflow")).workflows ?? []).some((w: WfListItem) => w.id === edit.workflowId);
   console.log(`  ${draftRow.id === edit.workflowId && draftRow.schemaVersion === edit.version ? "ok" : "FAIL"}  draft serves its own id (v${draftRow.schemaVersion})`);
   console.log(`  ${headStill.id === head0.id && beforeVisible ? "ok" : "FAIL"}  old link still serves the live head`);
   console.log(`  ${!draftVisible ? "ok" : "FAIL"}  draft hidden from console list until activated`);
@@ -87,15 +90,15 @@ test("console lifecycle", () => only(async () => {
 
   const oldAfter = (await getJson(`/api/workflow/${head0.id}`)).workflow;
   const listAfter = await getJson("/api/workflow");
-  const activeCount = (listAfter.workflows ?? []).filter((w: any) => w.id === oldAfter.id && w.isActive).length;
+  const activeCount = (listAfter.workflows ?? []).filter((w: WfListItem) => w.id === oldAfter.id && w.isActive).length;
   console.log(`  ${oldAfter.id === edit.workflowId ? "ok" : "FAIL"}  old link forwards to the new head (${oldAfter.id.slice(0, 8)}…)`);
-  console.log(`  ${listAfter.workflows.some((w: any) => w.id === edit.workflowId) ? "ok" : "FAIL"}  new head visible in console list`);
+  console.log(`  ${listAfter.workflows.some((w: WfListItem) => w.id === edit.workflowId) ? "ok" : "FAIL"}  new head visible in console list`);
   console.log(`  ${activeCount === 1 ? "ok" : "FAIL"}  exactly one active row in the tenant list`);
 
   // --- 3. Versions + restore ------------------------------------------------
   const vs = await getJson(`/api/workflow/${edit.workflowId}/versions`);
-  const restoredExists = (vs.versions ?? []).some((v: any) => v.version === head0.schemaVersion);
-  console.log(`  ${vs.success && restoredExists ? "ok" : "FAIL"}  versions lists the lineage (${(vs.versions ?? []).length} rows, head v${(vs.versions ?? []).find((v: any) => v.isHead)?.version})`);
+  const restoredExists = (vs.versions ?? []).some((v: VersionItem) => v.version === head0.schemaVersion);
+  console.log(`  ${vs.success && restoredExists ? "ok" : "FAIL"}  versions lists the lineage (${(vs.versions ?? []).length} rows, head v${(vs.versions ?? []).find((v: VersionItem) => v.isHead)?.version})`);
 
   const restoreRes = await fetch(`${BASE}/api/workflow/${edit.workflowId}/restore`, {
     method: "POST", headers: authed({ "Content-Type": "application/json" }),
@@ -104,7 +107,7 @@ test("console lifecycle", () => only(async () => {
   const restore = await restoreRes.json();
   if (!restore.success) throw new Error(`restore failed: ${JSON.stringify(restore).slice(0, 300)}`);
   const restored = (await getJson(`/api/workflow/${restore.workflowId}`)).workflow;
-  const restoredName = (restored.config as any)?.archetypeConfig?.productName;
+  const restoredName = (restored.config as { archetypeConfig?: { productName?: string } })?.archetypeConfig?.productName;
   console.log(`  ${restoredName && restoredName === String(base.productName ?? "") ? "ok" : "FAIL"}  restore re-emits the old config as draft v${restore.version} ("${restoredName}")`);
 
   // --- 3b. concurrency: parallel edits allocate DISTINCT versions ------------
@@ -118,9 +121,9 @@ test("console lifecycle", () => only(async () => {
       }).then((r) => r.json()),
     ),
   );
-  const parVersions = par.map((p: any) => p.version as number).sort((a, b) => a - b);
+  const parVersions = par.map((p: { version: number }) => p.version).sort((a, b) => a - b);
   const parDistinct = new Set(parVersions).size === par.length;
-  console.log(`  ${par.every((p: any) => p.success) && parDistinct ? "ok" : "FAIL"}  3 parallel edits → distinct versions (${parVersions.join(", ")})`);
+  console.log(`  ${par.every((p: { success?: boolean }) => p.success) && parDistinct ? "ok" : "FAIL"}  3 parallel edits → distinct versions (${parVersions.join(", ")})`);
 
   // --- 3c. concurrency: parallel activations leave EXACTLY ONE head ----------
   const actResults = await Promise.all(
@@ -129,8 +132,8 @@ test("console lifecycle", () => only(async () => {
     ),
   );
   const vsPar = await getJson(`/api/workflow/${edit.workflowId}/versions`);
-  const headCount = (vsPar.versions ?? []).filter((v: any) => v.isHead).length;
-  console.log(`  ${actResults.every((a: any) => a.success) && headCount === 1 ? "ok" : "FAIL"}  2 parallel activations → exactly one head (${headCount})`);
+  const headCount = (vsPar.versions ?? []).filter((v: VersionItem) => v.isHead).length;
+  console.log(`  ${actResults.every((a: { success?: boolean }) => a.success) && headCount === 1 ? "ok" : "FAIL"}  2 parallel activations → exactly one head (${headCount})`);
 
   // --- 4. app-state lineage scoping -----------------------------------------
   const st = await getJson(`/api/app-state/${restore.workflowId}`);
@@ -147,11 +150,11 @@ test("console lifecycle", () => only(async () => {
 
   // --- 4c. audit trail: edit + activate + restore are all recorded -----------
   const ch = await getJson(`/api/workflow/${restore.workflowId}/changes`);
-  const kinds = (ch.changes ?? []).map((c: any) => c.kind);
+  const kinds = (ch.changes ?? []).map((c: { kind: string }) => c.kind);
   const hasEdit = kinds.includes("edit");
   const hasActivate = kinds.includes("activate");
   const hasRestore = kinds.includes("restore");
-  const hashes = (ch.changes ?? []).every((c: any) => typeof c.configHash === "string" && c.configHash.length >= 16);
+  const hashes = (ch.changes ?? []).every((c: { configHash?: string }) => typeof c.configHash === "string" && c.configHash.length >= 16);
   console.log(`  ${ch.success && hasEdit ? "ok" : "FAIL"}  audit records the edit (${kinds.join(", ") || "none"})`);
   console.log(`  ${hasActivate ? "ok" : "FAIL"}  audit records the activation`);
   console.log(`  ${hasRestore ? "ok" : "FAIL"}  audit records the restore`);

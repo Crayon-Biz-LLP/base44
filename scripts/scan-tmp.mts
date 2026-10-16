@@ -8,5 +8,5 @@ const { workflows } = await import("../src/db/schema");
 const { eq } = await import("drizzle-orm");
 const id = "4f439d8e-c2ae-49e1-940c-f13e9aa1e139";
 const wf = await db.select({ config: workflows.config }).from(workflows).where(eq(workflows.id, id)).limit(1);
-const c = wf[0].config as any;
+const c = wf[0].config as { schema?: unknown };
 console.log(JSON.stringify(c.schema, null, 2));

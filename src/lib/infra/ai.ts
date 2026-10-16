@@ -23,14 +23,15 @@ export function getModel(attempt: number, modelId: string = "gemini-3.1-flash-li
   return provider(modelId);
 }
 
-export function isQuotaError(error: any): boolean {
+export function isQuotaError(error: unknown): boolean {
   if (!error) return false;
+  const e = error as { statusCode?: number; message?: string; cause?: { statusCode?: number; message?: string } };
   
-  if (error.statusCode === 429 || error?.cause?.statusCode === 429) {
+  if (e.statusCode === 429 || e.cause?.statusCode === 429) {
     return true;
   }
   
-  const errorMessage = error?.message || error?.cause?.message || error?.toString() || "";
+  const errorMessage = e.message || e.cause?.message || String(error);
   const lowerMsg = errorMessage.toLowerCase();
   
   return (
@@ -44,7 +45,7 @@ export function isQuotaError(error: any): boolean {
     // to the next key exactly like quota exhaustion, not abort extraction.
     lowerMsg.includes("high demand") ||
     lowerMsg.includes("overloaded") ||
-    error.statusCode === 503 ||
-    error?.cause?.statusCode === 503
+    e.statusCode === 503 ||
+    e.cause?.statusCode === 503
   );
 }

@@ -12,8 +12,9 @@ console.log("archetype:", pickArchetype(PROMPT).id);
 try {
   const gen = await generateConsoleForPrompt(PROMPT);
   console.log("OK:", gen.archetype, "—", gen.productName);
-} catch (e: any) {
-  console.log("FAIL:", String(e?.message || e).slice(0, 300));
-  if (e?.cause) console.log("CAUSE:", String(e.cause?.message || e.cause).slice(0, 300));
+} catch (e) {
+  const err = e as { message?: string; cause?: { message?: string } | string };
+  console.log("FAIL:", String(err?.message || e).slice(0, 300));
+  if (err?.cause) console.log("CAUSE:", String(typeof err.cause === "string" ? err.cause : err.cause.message).slice(0, 300));
 }
 process.exit(0);

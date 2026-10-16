@@ -42,14 +42,14 @@ const inserted = await db.insert(workflows).values({
   status: "draft",
 }).returning();
 const wfId = inserted[0].id;
-check("workflow stamped with archetype", (inserted[0].config as any)?.archetype === gen.archetype);
+check("workflow stamped with archetype", (inserted[0].config as { archetype?: string })?.archetype === gen.archetype);
 
 // 2. Build records that mirror the console's buildRecords() using real extracted keys.
-const cfg = gen.config as any;
+const cfg = gen.config as { metrics: { key: string; target: number }[]; people: { name: string }[] };
 let records: Record<string, unknown>[] = [];
 if (gen.archetype === "target-board") {
-  const keys = cfg.metrics.map((m: any) => m.key);
-  const people = cfg.people.map((p: any) => p.name);
+  const keys = cfg.metrics.map((m) => m.key);
+  const people = cfg.people.map((p) => p.name);
   records = people.map((who: string, i: number) => {
     const r: Record<string, unknown> = { employee: who, report_date: new Date().toISOString().slice(0, 10) };
     keys.forEach((k: string, j: number) => { r[k] = (i + j) % 3 === 0 ? cfg.metrics[j].target : Math.max(0, cfg.metrics[j].target - 1); });
@@ -66,9 +66,14 @@ if (gen.archetype === "target-board") {
 console.log(`records fixture: ${records.length} rows`);
 
 // 3. Push through the REAL submit-form route (what __opsDeskSubmit__ does).
+// The route is tenant-private (A3): carry the signed owner cookie the gate sets.
+const { signOwnerValue } = await import("../src/lib/infra/app-auth");
 const sub = await fetch(`${BASE}/api/submit-form`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Cookie: `opsdesk_tenant_id=${signOwnerValue(tenantId)}`,
+  },
   body: JSON.stringify({ workflowId: wfId, layout_type: "grid", actuals: {}, filledBy: "E2E Bridge", payload: { records } }),
 });
 check("submit-form accepted records", sub.ok, `${sub.status}`);
@@ -78,7 +83,7 @@ if (!sub.ok) console.log(await sub.text());
 const dig = await fetch(`${BASE}/api/cron/digest`, { method: "POST" });
 const digJson = await dig.json();
 check("digest ran", dig.ok && digJson.success, `${dig.status}`);
-const digest = (digJson.digests ?? []).find((d: any) => d.message?.includes("Console Verdicts"));
+const digest = (digJson.digests ?? []).find((d: { message?: string }) => d.message?.includes("Console Verdicts"));
 check("digest contains console verdicts", Boolean(digest));
 if (digest) {
   const msg: string = digest.message;

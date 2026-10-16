@@ -6,12 +6,26 @@ import { eq } from "drizzle-orm";
 import { ensureCanonicalKeys, ManifestSchema, deriveKey, type Manifest } from "@/lib/domain/manifest";
 import { applyGuardrails, validateIntegrity, validateAgainstPrompt } from "@/lib/domain/guardrails";
 import { generateWithRepair } from "@/lib/infra/repair";
-import { getSessionTenantId } from "@/lib/infra/auth";
-import { resolveDateRule } from "@/lib/domain/cube/dates";
+import { requireOwnerTenant } from "@/lib/infra/auth";
+import { resolveDateRule, type DateRule } from "@/lib/domain/cube/dates";
 import { isQuotaError } from "@/lib/infra/ai";
 import { generateArtifact } from "@/lib/infra/artifact";
 import type { ArchetypeId } from "@/lib/infra/archetypes";
 import { runConsoleEdit } from "@/lib/infra/edit-pipeline";
+
+// Pre-canonicalization shape of the LLM extraction. It is deliberately loose:
+// it becomes a Manifest only after ensureCanonicalKeys + guardrails run, so the
+// two seams below cast explicitly rather than pretending the raw object conforms.
+type ChatColumn = { label?: string; key?: string; [k: string]: unknown };
+type ChatRow = { label?: string; key?: string; dateRule?: unknown; [k: string]: unknown };
+type ChatIntelligence = { entities?: unknown[]; [k: string]: unknown };
+type ChatSchema = {
+  layout_type?: string;
+  rows?: ChatRow[];
+  columns?: ChatColumn[];
+  intelligence?: ChatIntelligence;
+  [k: string]: unknown;
+};
 import { upgradeForEdit } from "@/lib/domain/config-versions";
 import { recordWorkflowChange, configHashOf } from "@/lib/infra/audit";
 
@@ -19,10 +33,9 @@ export async function POST(req: Request) {
   try {
     const { messages, existingWorkflowId } = await req.json();
 
-    const sessionTenantId = await getSessionTenantId();
-    if (!sessionTenantId) {
-      return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
-    }
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const sessionTenantId = guard.tenantId;
 
     let existingWorkflowContext = "";
     let oldWorkflowRecord: Record<string, unknown> | null = null;
@@ -204,7 +217,7 @@ EXAMPLE 3 (Invoice): "invoice form"
       });
     }
 
-    let processedSchema: any = extraction.ui_schema;
+    let processedSchema: ChatSchema = extraction.ui_schema as ChatSchema;
 
     // The archetype-revision path above may have handled the turn entirely
     // (concrete noun edits skip clarification) — the manifest pipeline below
@@ -214,19 +227,19 @@ EXAMPLE 3 (Invoice): "invoice form"
     // Coerce entities if missing but we have person-like rows/columns (heuristics)
     if (!processedSchema.intelligence) processedSchema.intelligence = {};
     if (!processedSchema.intelligence.entities) {
-      const allLabels = [...(processedSchema.rows || []), ...(processedSchema.columns || [])].map((x: any) => x.label || x).filter((x: any) => typeof x === 'string');
+      const allLabels = [...(processedSchema.rows || []), ...(processedSchema.columns || [])].map((x) => (typeof x === "string" ? x : (x.label || x))).filter((x): x is string => typeof x === 'string');
       // If rows are names (not dates), populate entities
-      if (processedSchema.layout_type === "grid" && processedSchema.rows && !processedSchema.rows.some((r:any) => r.dateRule)) {
-        processedSchema.intelligence.entities = processedSchema.rows.map((r:any) => ({ label: r.label, key: r.key || deriveKey(r.label) }));
+      if (processedSchema.layout_type === "grid" && processedSchema.rows && !processedSchema.rows.some((r) => r.dateRule)) {
+        processedSchema.intelligence.entities = processedSchema.rows.map((r) => ({ label: r.label, key: r.key || deriveKey(r.label ?? "") }));
       }
     }
 
     // Resolve date rules for grid rows
     if (processedSchema.layout_type === "grid" && processedSchema.rows) {
-      const expandedRows: any[] = [];
+      const expandedRows: ChatRow[] = [];
       for (const row of processedSchema.rows) {
         if (row.dateRule) {
-          const dates = resolveDateRule(row.dateRule as any, "Asia/Kolkata");
+          const dates = resolveDateRule(row.dateRule as DateRule, "Asia/Kolkata");
           for (const d of dates) {
             expandedRows.push({
               ...row,
@@ -242,12 +255,12 @@ EXAMPLE 3 (Invoice): "invoice form"
       processedSchema.rows = expandedRows;
     }
 
-    processedSchema = ensureCanonicalKeys(processedSchema) as Manifest;
+    processedSchema = ensureCanonicalKeys(processedSchema as unknown as Manifest) as unknown as ChatSchema;
 
     // Deterministic guardrails: public-safety net under the LLM. Referential
     // integrity (no phantom-key constraints), target/type binding, entryMode.
-    const guardrail = applyGuardrails(processedSchema, userPrompt, { enforceEntryMode: true });
-    processedSchema = guardrail.schema;
+    const guardrail = applyGuardrails(processedSchema as unknown as Manifest, userPrompt, { enforceEntryMode: true });
+    processedSchema = guardrail.schema as unknown as ChatSchema;
     if (guardrail.fixes.length > 0) console.log("[Guardrails] Fixes:", guardrail.fixes);
     if (guardrail.errors.length > 0) console.warn("[Guardrails] Residual integrity errors (safety-netted):", guardrail.errors);
     } // end if (processedSchema)
@@ -263,7 +276,7 @@ EXAMPLE 3 (Invoice): "invoice form"
       artifactHtml = await generateArtifact({
         userPrompt,
         title: extraction.form_title || "",
-        schema: processedSchema
+        schema: processedSchema as unknown as Manifest
       });
       if (artifactHtml) console.log("[Artifact] Generated HTML length:", artifactHtml.length);
     } catch (e) {
@@ -296,7 +309,7 @@ EXAMPLE 3 (Invoice): "invoice form"
 
       const newWorkflow = await db.insert(workflows).values({
         tenantId: sessionTenantId,
-        primitiveType: isArchetypeRevision ? (cfg0.archetype as string) : processedSchema.layout_type,
+        primitiveType: isArchetypeRevision ? (cfg0.archetype as string) : (processedSchema.layout_type as string),
         config: nextConfig,
         lineageId: (oldWorkflowRecord.lineageId as string) || (oldWorkflowRecord.id as string),
         schemaVersion,
@@ -323,7 +336,7 @@ EXAMPLE 3 (Invoice): "invoice form"
     } else {
       const newWorkflow = await db.insert(workflows).values({
         tenantId: sessionTenantId,
-        primitiveType: processedSchema.layout_type,
+        primitiveType: processedSchema.layout_type as string,
         config: { title: extraction.form_title, schema: processedSchema, userPrompt, ...(artifactHtml ? { artifactHtml } : {}) },
         schemaVersion,
         isActive: false,

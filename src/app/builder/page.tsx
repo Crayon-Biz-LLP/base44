@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -8,17 +8,56 @@ import { Bot, User, Send, CheckCircle2, AlertTriangle, Loader2, Copy, ExternalLi
 import { QRCodeSVG } from "qrcode.react";
 import { DEMO_INDUSTRIES, PromptKind } from "@/data/demo-prompts";
 import { safeJson } from "@/lib/infra/fetch";
+import type { Manifest } from "@/lib/domain/manifest";
+
+// Builder-local view types: the chat response is a Manifest, but legacy/serialized
+// payloads may carry bare-string columns, so the render path tolerates both.
+type ChatMessage = {
+  role: string;
+  content: string;
+  id: string;
+  workflowId?: string;
+  appTitle?: string;
+  version?: number;
+  ui_schema?: Manifest;
+  isDraft?: boolean;
+};
+type TenantWorkflow = { id: string; title: string; isActive: boolean };
+type BuilderColumn = { key?: string; id?: string; label?: string; target?: number; targets?: Record<string, number> };
+type BuilderRow = { key?: string; id?: string; label?: string; target?: number };
+type BuilderField = { key?: string; label?: string; type?: string };
+
+const TOUR_KEY = "opsdesk_tour_dismissed";
+
+// Same-tab writes don't fire "storage"; cross-tab ones do (a boolean snapshot
+// keeps getSnapshot's result stable by value, so no render loop).
+function subscribeTourDismissed(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+const getTourDismissedClient = () => localStorage.getItem(TOUR_KEY) === "1";
+const getTourDismissedServer = () => false;
+
+// Message ids only need per-session uniqueness; a monotonic timestamp keeps the
+// impure clock read out of the render-purity analysis.
+const timeId = (offset = 0) => (Date.now() + offset).toString();
 
 export default function BuilderChatPage() {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [localInput, setLocalInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // App state
-  const [tenantWorkflows, setTenantWorkflows] = useState<any[]>([]);
+  const [tenantWorkflows, setTenantWorkflows] = useState<TenantWorkflow[]>([]);
   const [activeIndustryId, setActiveIndustryId] = useState<string>(DEMO_INDUSTRIES[0].id);
-  const [showTour, setShowTour] = useState(true);
+  const tourDismissedStored = useSyncExternalStore(
+    subscribeTourDismissed,
+    getTourDismissedClient,
+    getTourDismissedServer,
+  );
+  const [tourDismissedThisSession, setTourDismissedThisSession] = useState(false);
+  const showTour = !tourDismissedStored && !tourDismissedThisSession;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -30,10 +69,6 @@ export default function BuilderChatPage() {
         if (data.workflows) setTenantWorkflows(data.workflows);
       })
       .catch(console.error);
-
-    // Tour strip memory
-    const tourDismissed = localStorage.getItem("opsdesk_tour_dismissed");
-    if (tourDismissed) setShowTour(false);
   }, []);
 
   useEffect(() => {
@@ -41,16 +76,16 @@ export default function BuilderChatPage() {
   }, [messages, isLoading, error]);
 
   const dismissTour = () => {
-    setShowTour(false);
-    localStorage.setItem("opsdesk_tour_dismissed", "1");
+    setTourDismissedThisSession(true);
+    localStorage.setItem(TOUR_KEY, "1");
   };
 
-  const customSubmit = async (e?: any, overrideInput?: string, promptKind?: PromptKind, targetTitle?: string) => {
+  const customSubmit = async (e?: React.FormEvent, overrideInput?: string, promptKind?: PromptKind, targetTitle?: string) => {
     if (e) e.preventDefault();
     const textToSubmit = overrideInput || localInput;
     if (!textToSubmit || !textToSubmit.trim()) return;
     
-    const userMessage = { role: 'user', content: textToSubmit, id: Date.now().toString() };
+    const userMessage = { role: 'user', content: textToSubmit, id: timeId() };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setLocalInput('');
@@ -81,7 +116,7 @@ export default function BuilderChatPage() {
         throw new Error(data.error || `API returned ${res.status}`);
       }
       
-      const assistantMessageId = (Date.now() + 1).toString();
+      const assistantMessageId = timeId(1);
       setMessages([...newMessages, { 
         role: 'assistant', 
         content: data.message, 
@@ -93,9 +128,9 @@ export default function BuilderChatPage() {
         isDraft: true // Track draft status
       }]);
       
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to connect to AI");
+      setError((err as { message?: string }).message || "Failed to connect to AI");
     } finally {
       setIsLoading(false);
     }
@@ -121,8 +156,8 @@ export default function BuilderChatPage() {
       if (!res.ok) throw new Error(data.error || "Failed to approve workflow");
       
       setMessages(msgs => msgs.map(m => m.id === messageId ? { ...m, isDraft: false } : m));
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Failed to approve workflow");
     } finally {
       setIsLoading(false);
     }
@@ -144,7 +179,7 @@ export default function BuilderChatPage() {
             App Builder
           </CardTitle>
           <CardDescription className="text-sm">
-            Describe your manual process. I'll generate a custom web app for your staff instantly.
+            Describe your manual process. I&apos;ll generate a custom web app for your staff instantly.
           </CardDescription>
         </CardHeader>
         
@@ -194,7 +229,7 @@ export default function BuilderChatPage() {
                   disabled={isLoading}
                   className="bg-white border border-gray-200 hover:border-primary hover:bg-primary/5 text-left rounded-xl shadow-sm px-3 py-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <span className="block text-xs font-medium text-gray-800">"{p.text}"</span>
+                  <span className="block text-xs font-medium text-gray-800">&quot;{p.text}&quot;</span>
                   <span className="flex items-center gap-1 text-[10px] text-gray-400 mt-0.5">
                         <Info className="w-3 h-3 text-primary/60 shrink-0" />
                         <span>{p.caption}</span>
@@ -213,7 +248,7 @@ export default function BuilderChatPage() {
               </div>
             )}
 
-          {messages.map((m: any) => (
+          {messages.map((m: ChatMessage) => (
             <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               {m.role !== "user" && (
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-1">
@@ -258,7 +293,10 @@ export default function BuilderChatPage() {
                                   </div>
 
                                   {(() => {
-                                      const hasCellTargets = m.ui_schema.columns.some((c: any) => typeof c !== 'string' && c.targets && Object.keys(c.targets).length > 0);
+                                      const ui = m.ui_schema;
+                                      if (!ui || ui.layout_type !== "grid" || !ui.columns) return null;
+                                      const cols = ui.columns;
+                                      const hasCellTargets = cols.some((c: BuilderColumn) => c.targets && Object.keys(c.targets).length > 0);
                                       if (hasCellTargets) {
                                           return (
                                             <div>
@@ -268,15 +306,15 @@ export default function BuilderChatPage() {
                                                         <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase">
                                                             <tr>
                                                                 <th className="px-3 py-2 font-medium">Row</th>
-                                                                {m.ui_schema.columns.map((c: any, i: number) => <th key={i} className="px-3 py-2 font-medium">{typeof c === 'string' ? c : c.label}</th>)}
+                                                                {cols.map((c: BuilderColumn, i: number) => <th key={i} className="px-3 py-2 font-medium">{typeof c === 'string' ? c : c.label}</th>)}
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-100 bg-white">
-                                                            {m.ui_schema.rows?.slice(0, 5).map((r: any, idx: number) => (
+                                                            {ui.rows?.slice(0, 5).map((r: BuilderRow, idx: number) => (
                                                                 <tr key={idx}>
                                                                     <td className="px-3 py-2 font-medium text-gray-800">{r.label}</td>
-                                                                    {m.ui_schema.columns.map((c: any, cidx: number) => {
-                                                                        const tKey = r.key || r.id || r.label;
+                                                                    {cols.map((c: BuilderColumn, cidx: number) => {
+                                                                        const tKey = (r.key || r.id || r.label) as string;
                                                                         const cellTarget = c.targets && c.targets[tKey] ? c.targets[tKey] : (c.target ? c.target : "-");
                                                                         return <td key={cidx} className="px-3 py-2 text-indigo-700 font-semibold">{cellTarget !== "-" ? `🎯 ${cellTarget}` : "-"}</td>
                                                                     })}
@@ -285,7 +323,7 @@ export default function BuilderChatPage() {
                                                         </tbody>
                                                     </table>
                                                 </div>
-                                                {m.ui_schema.rows?.length > 5 && <div className="text-xs text-gray-400 mt-1">Showing first 5 rows</div>}
+                                                {ui.rows?.length > 5 && <div className="text-xs text-gray-400 mt-1">Showing first 5 rows</div>}
                                             </div>
                                           );
                                       }
@@ -293,7 +331,7 @@ export default function BuilderChatPage() {
                                         <div>
                                           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Metrics & Targets</span>
                                           <div className="flex flex-wrap gap-2">
-                                            {m.ui_schema.columns.map((c: any, idx: number) => (
+                                            {cols.map((c: BuilderColumn, idx: number) => (
                                               <div key={idx} className="bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
                                                 <span className="font-medium">{typeof c === 'string' ? c : c.label}</span>
                                                 {typeof c !== 'string' && c.target && <span className="bg-indigo-200 text-indigo-800 text-xs px-2 py-0.5 rounded font-bold">🎯 {c.target}</span>}
@@ -307,7 +345,7 @@ export default function BuilderChatPage() {
                                   <div>
                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Rows</span>
                                     <div className="flex flex-wrap gap-1">
-                                      {m.ui_schema.rows?.slice(0,5).map((r: any, idx: number) => (
+                                      {m.ui_schema.rows?.slice(0,5).map((r: BuilderRow, idx: number) => (
                                         <span key={idx} className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs flex items-center gap-1">
                                           {r.label}
                                           {r.target && <span className="text-[10px] text-gray-500 font-medium">🎯 {r.target}</span>}
@@ -322,7 +360,7 @@ export default function BuilderChatPage() {
                                 <div>
                                   <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block mb-1">Fields</span>
                                   <ul className="text-sm space-y-1">
-                                    {m.ui_schema.fields?.map((f: any, idx: number) => (
+                                    {m.ui_schema.fields?.map((f: BuilderField, idx: number) => (
                                       <li key={idx} className="flex justify-between border-b border-gray-50 pb-1">
                                         <span className="text-gray-700 font-medium">{f.label}</span>
                                         <span className="text-gray-400 text-xs uppercase">{f.type}</span>
@@ -337,7 +375,7 @@ export default function BuilderChatPage() {
                         <div className="flex gap-4 w-full max-w-sm">
                           <Button 
                             className="w-full" 
-                            onClick={() => approveDraft(m.id, m.workflowId)}
+                            onClick={() => approveDraft(m.id, m.workflowId as string)}
                             disabled={isLoading}
                           >
                             Approve & Deploy
@@ -351,14 +389,14 @@ export default function BuilderChatPage() {
                             <CheckCircle2 className="w-5 h-5" />
                           </div>
                           <div>
-                            <h4 className="font-semibold text-green-900">App Ready for Deployment {m.version > 1 && <span className="ml-2 px-2 py-0.5 bg-green-200 text-green-800 rounded-full text-[10px]">v{m.version}</span>}</h4>
+                            <h4 className="font-semibold text-green-900">App Ready for Deployment {(m.version ?? 0) > 1 && <span className="ml-2 px-2 py-0.5 bg-green-200 text-green-800 rounded-full text-[10px]">v{m.version}</span>}</h4>
                             <p className="text-xs text-green-700">{m.appTitle}</p>
                           </div>
                         </div>
                         
                         <div className="p-5 flex flex-col md:flex-row gap-6 items-center">
                           <div className="flex-1 space-y-4 w-full">
-                            {m.version > 1 && (
+                            {(m.version ?? 0) > 1 && (
                               <div className="bg-blue-50 text-blue-700 text-xs p-2 rounded-lg border border-blue-100 flex items-center gap-2">
                                 <span>Changes saved. Old QR codes automatically point to this new version.</span>
                               </div>

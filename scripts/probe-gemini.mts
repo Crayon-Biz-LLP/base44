@@ -36,8 +36,8 @@ async function probe(label: string, key: string, model: string): Promise<void> {
     const body = (await res.json().catch(() => ({}))) as { error?: { status?: string; message?: string } };
     const msg = (body.error?.message || "").slice(0, 90).replace(/\n/g, " ");
     console.log(`${label} × ${model}: ${res.status} ${body.error?.status || ""} ${msg}${retryAfter ? ` (retry-after: ${retryAfter})` : ""}`);
-  } catch (e: any) {
-    console.log(`${label} × ${model}: NETWORK ${e?.message?.slice(0, 80)}`);
+  } catch (e) {
+    console.log(`${label} × ${model}: NETWORK ${(e as { message?: string })?.message?.slice(0, 80)}`);
   }
 }
 

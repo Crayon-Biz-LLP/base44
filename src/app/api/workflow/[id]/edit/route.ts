@@ -20,7 +20,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 import type { ArchetypeId } from "@/lib/infra/archetypes";
 import { resolveServeRow } from "@/lib/infra/lineage";
 import { insertDraftVersion } from "@/lib/infra/lineage";
@@ -31,8 +31,9 @@ import { recordWorkflowChange, configHashOf } from "@/lib/infra/audit";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     const body = await req.json().catch(() => null);
 

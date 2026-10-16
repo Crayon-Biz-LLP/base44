@@ -3,17 +3,23 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { InvariantBanner } from "@/components/ds/InvariantBanner";
 import { evaluateFormula, checkInvariant } from "@/lib/domain/math";
+import type { FormState } from "./FieldInput";
+import type { Manifest } from "@/lib/domain/manifest";
 import { AlertTriangle } from "lucide-react";
 
-export function SubmitReview({ schema, formState, onSubmit, isSubmitting, onEdit }: { schema: any, formState: any, onSubmit: () => void, isSubmitting: boolean, onEdit: () => void }) {
+type Intelligence = NonNullable<Manifest["intelligence"]>;
+type Logic = NonNullable<Manifest["logic"]>;
+type ScopeFormula = { targetKey: string; expression: string; scope?: string };
+
+export function SubmitReview({ schema, formState, onSubmit, isSubmitting, onEdit }: { schema: Manifest, formState: FormState, onSubmit: () => void, isSubmitting: boolean, onEdit: () => void }) {
   
   const warnings = useMemo(() => {
     const warns: string[] = [];
-    const int = schema.intelligence || {};
-    const logic = schema.logic || {};
+    const int: Intelligence = schema.intelligence || {};
+    const logic: Logic = schema.logic || {};
 
     if (schema.layout_type === "list") {
-      const scope: any = { ...formState };
+      const scope = { ...formState } as Record<string, number>;
       if (int.formulas) {
         for (const f of int.formulas) {
           try { scope[f.targetKey] = evaluateFormula(f.expression, scope); } catch {}
@@ -40,7 +46,7 @@ export function SubmitReview({ schema, formState, onSubmit, isSubmitting, onEdit
               let filled = 0;
               for (const r of rows) {
                  const rKey = r.key || r.label;
-                 if (gridActuals[rKey]?.[cov.key]) filled++;
+                 if (cell(gridActuals, rKey, cov.key)) filled++;
               }
               if (filled < cov.count) warns.push(cov.label || `Coverage: ${cov.key} needs ${cov.count} filled (got ${filled})`);
            }
@@ -52,12 +58,12 @@ export function SubmitReview({ schema, formState, onSubmit, isSubmitting, onEdit
          if (int.uniqueness.scope === "row") {
             for (const r of rows) {
                const rKey = r.key || r.label;
-               const seen = new Set();
+               const seen = new Set<string>();
                for (const c of cols) {
                   const cKey = c.key || c.label;
-                  const val = gridActuals[rKey]?.[cKey];
+                  const val = cell(gridActuals, rKey, cKey);
                   if (val && seen.has(val)) warns.push(int.uniqueness.label || `Duplicate ${val} in row ${r.label}`);
-                  seen.add(val);
+                  if (val) seen.add(val);
                }
             }
          }
@@ -69,7 +75,7 @@ export function SubmitReview({ schema, formState, onSubmit, isSubmitting, onEdit
             let matches = 0;
             for (const r of rows) {
                const rKey = r.key || r.label;
-               const val = gridActuals[rKey]?.[sm.columnKey];
+               const val = cell(gridActuals, rKey, sm.columnKey);
                if (val && sm.barring.includes(val.toLowerCase())) matches++;
             }
             if (matches >= sm.escalateAt) warns.push(sm.label || `Escalation: ${matches} marked as ${sm.barring.join("/")}`);
@@ -78,13 +84,13 @@ export function SubmitReview({ schema, formState, onSubmit, isSubmitting, onEdit
 
       for (const col of cols) {
         const colKey = col.key || col.label;
-        const scope: any = {};
+        const scope: Record<string, number> = {};
         for (const r of rows) {
-          const rKey = r.key || r.label;
-          scope[rKey] = Number(gridActuals[rKey]?.[colKey]) || 0;
+          const rKey = (r.key || r.label) as string;
+          scope[rKey] = Number(cell(gridActuals, rKey, colKey)) || 0;
         }
         
-        const formulas = int.formulas || logic.formulas || [];
+        const formulas = (int.formulas || logic.formulas || []) as ScopeFormula[];
         for (const f of formulas) {
            if (!f.scope || f.scope === "column") {
               try { scope[f.targetKey] = evaluateFormula(f.expression, scope); } catch {}
@@ -136,4 +142,9 @@ export function SubmitReview({ schema, formState, onSubmit, isSubmitting, onEdit
       </div>
     </Card>
   );
+}
+
+function cell(formState: FormState, rowKey: string | undefined, colKey: string | undefined): string | undefined {
+  if (!rowKey || !colKey) return undefined;
+  return (formState[rowKey] as Record<string, string> | undefined)?.[colKey];
 }

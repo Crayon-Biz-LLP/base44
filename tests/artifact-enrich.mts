@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { enrichArtifact, deriveAccentHex, designPreamble, scoreArtifact } from "../src/lib/infra/artifact";
+import type { Manifest } from "../src/lib/domain/manifest";
 
 console.log("Artifact enrichment tests");
 
@@ -50,14 +51,14 @@ test("existing font links are not duplicated", () => {
 });
 
 test("deriveAccentHex picks first declared accent", () => {
-  assert.equal(deriveAccentHex({ columns: [{ label: "A" }, { label: "B", visual: { accent: "emerald" } }] } as any), "#10b981");
-  assert.equal(deriveAccentHex({ fields: [{ visual: { accent: "amber" } }] } as any), "#f59e0b");
-  assert.equal(deriveAccentHex({ rows: [{ visual: { accent: "blue" } }] } as any), "#3b82f6");
+  assert.equal(deriveAccentHex({ columns: [{ label: "A" }, { label: "B", visual: { accent: "emerald" } }] } as unknown as Manifest), "#10b981");
+  assert.equal(deriveAccentHex({ fields: [{ visual: { accent: "amber" } }] } as unknown as Manifest), "#f59e0b");
+  assert.equal(deriveAccentHex({ rows: [{ visual: { accent: "blue" } }] } as unknown as Manifest), "#3b82f6");
 });
 
 test("deriveAccentHex falls back to neutral", () => {
-  assert.equal(deriveAccentHex({} as any), "#0ea5e9");
-  assert.equal(deriveAccentHex({ columns: [{ label: "A" }] } as any), "#0ea5e9");
+  assert.equal(deriveAccentHex({} as unknown as Manifest), "#0ea5e9");
+  assert.equal(deriveAccentHex({ columns: [{ label: "A" }] } as unknown as Manifest), "#0ea5e9");
 });
 
 test("imitated ops-ds block is replaced with the real kit", () => {

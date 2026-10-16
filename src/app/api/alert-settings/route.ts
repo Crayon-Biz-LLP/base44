@@ -5,11 +5,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 
 export async function GET() {
-  const tenantId = await getSessionTenantId();
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+  const guard = await requireOwnerTenant();
+  if (!guard.ok) return guard.response;
+  const tenantId = guard.tenantId;
   const rows = await db.select({ alertEmail: tenants.alertEmail, alertPhone: tenants.alertPhone }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
   if (!rows.length) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   return NextResponse.json({ success: true, ...rows[0] });
@@ -17,8 +18,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
     const body = await req.json().catch(() => ({}));
     const email = typeof body.alertEmail === "string" ? body.alertEmail.trim() : "";
     const phone = typeof body.alertPhone === "string" ? body.alertPhone.trim() : "";

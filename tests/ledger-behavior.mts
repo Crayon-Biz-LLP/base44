@@ -2,31 +2,18 @@
 // table in the real production sandbox like a user: open entry → edit → apply
 // → balances recompute → banner logic follows threshold → spotlight →
 // persistence → sync. Content-agnostic across domains.
-import { chromium, type Frame, type Page } from "playwright-core";
+import {
+  BASE,
+  addOwnerSession,
+  artifactFrame,
+  createChecker,
+  launchBrowser,
+  requireEnv,
+  tenantOf,
+} from "./helpers/session.mts";
 
-const CR =
-  "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-const BASE = "http://localhost:3000";
-const WORKFLOW_ID = process.env.LG_WF || "";
-
-let failures = 0;
-let passes = 0;
-function check(name: string, ok: boolean, extra = "") {
-  if (ok) { passes++; console.log(`  ok  ${name} ${extra}`); }
-  else { failures++; console.log(`  FAIL  ${name} ${extra}`); }
-}
-
-async function artifactFrame(page: Page): Promise<Frame> {
-  for (let i = 0; i < 30; i++) {
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    if (frame) {
-      const ok = await frame.evaluate(() => !!document.body).catch(() => false);
-      if (ok) return frame;
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error("artifact iframe unavailable");
-}
+const WORKFLOW_ID = requireEnv("LG_WF");
+const { check, finish } = createChecker();
 
 // Globals inside the sandboxed artifact iframe (declared for TS only).
 declare const OPENING: number;
@@ -36,21 +23,13 @@ declare const state: { entries: { l: string; a: number; t: string; d: number; ac
 
 async function main() {
   console.log("=== Ledger behavioral verification (headless Chromium) ===");
-  if (!WORKFLOW_ID) throw new Error("Set LG_WF=<workflow id>");
-  const browser = await chromium.launch({ executablePath: CR, headless: true });
+  const browser = await launchBrowser();
 
-  const wfRes = await fetch(`${BASE}/api/workflow/${WORKFLOW_ID}`);
-  const wf = await wfRes.json();
-  const tenantId = wf?.workflow?.tenantId as string | undefined;
+  const tenantId = await tenantOf(WORKFLOW_ID);
   check("workflow resolves", Boolean(tenantId));
 
   const context = await browser.newContext();
-  if (tenantId) {
-    await context.addInitScript(
-      ([tid, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); } catch {} },
-      [tenantId, JSON.stringify({ name: "E2E", role: "owner" })]
-    );
-  }
+  if (tenantId) await addOwnerSession(context, tenantId);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
 
@@ -176,8 +155,7 @@ async function main() {
   check("Engine 2: sync-state chip present after reload", (await f2.locator("#syncState").count()) === 1);
 
   await browser.close();
-  console.log(`\n${passes} passed, ${failures} failed`);
-  process.exit(failures > 0 ? 1 : 0);
+  finish();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

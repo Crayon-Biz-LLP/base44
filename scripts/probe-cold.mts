@@ -16,8 +16,8 @@ for (let i = 1; i <= RUNS; i++) {
   try {
     const cfg = await extractConsoleConfig(PROMPT);
     console.log(`[${i}/${RUNS}] OK — ${cfg.productName} | ${cfg.groupCount} ${cfg.groupLabel}s × ${cfg.unitsPerGroup} ${cfg.countLabel}s | fields: ${cfg.field1.label}/${cfg.field2.label}/${cfg.field3.label}`);
-  } catch (e: any) {
-    console.log(`[${i}/${RUNS}] FAIL — ${String(e?.message || e).slice(0, 200)}`);
+  } catch (e) {
+    console.log(`[${i}/${RUNS}] FAIL — ${String((e as { message?: string })?.message || e).slice(0, 200)}`);
   }
 }
 process.exit(0);

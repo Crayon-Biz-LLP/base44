@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 import { activateLineageHead } from "@/lib/infra/lineage";
 import { recordWorkflowChange } from "@/lib/infra/audit";
 
@@ -11,8 +11,9 @@ export async function POST(req: Request) {
     const { workflowId } = await req.json();
     if (!workflowId) return NextResponse.json({ error: "Missing workflowId" }, { status: 400 });
 
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     const wfs = await db.select().from(workflows).where(eq(workflows.id, workflowId)).limit(1);
     if (wfs.length === 0 || wfs[0].tenantId !== tenantId) {
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, workflowId: head.id, version: head.schemaVersion });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

@@ -18,10 +18,18 @@ import { TrendsStrip } from "@/components/trends-strip";
 //   name that can be tapped is always a name the console can scope to.
 // - Sessions keep the { name, role } shape the consoles already consume.
 
+type ConsoleWorkflow = {
+  tenantId?: string;
+  config?: {
+    archetypeConfig?: Record<string, unknown>;
+    schema?: { layout_type?: string };
+  };
+};
+
 export default function AppPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const { id } = resolvedParams;
-  const [workflow, setWorkflow] = useState<any>(null);
+  const [workflow, setWorkflow] = useState<ConsoleWorkflow | null>(null);
   const [artifactHtml, setArtifactHtml] = useState<string | null>(null);
   const [staffName, setStaffName] = useState<string>("");
   const [role, setRole] = useState<"owner" | "staff">("owner");
@@ -55,8 +63,8 @@ export default function AppPage({ params }: { params: Promise<{ id: string }> })
       } else {
         throw new Error(data.error || "Could not load the console");
       }
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Could not load the console");
     }
   }
 
@@ -120,6 +128,7 @@ export default function AppPage({ params }: { params: Promise<{ id: string }> })
   }, [workflow]);
 
   const handleLogin = async (loginRole: "owner" | "staff", loginName: string, loginPin: string) => {
+    if (!workflow) return;
     setIsLoading(true);
     // Owner logs in with a sentinel name — the endpoint requires one, but owner
     // identity is irrelevant to scoping (owner always sees the full console).
@@ -139,8 +148,8 @@ export default function AppPage({ params }: { params: Promise<{ id: string }> })
       setGate(false);
       setError(null);
       loadArtifact();
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Invalid PIN");
       setPin("");
     } finally {
       setIsLoading(false);

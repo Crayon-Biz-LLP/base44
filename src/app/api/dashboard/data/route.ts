@@ -2,17 +2,21 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { resolveDateRange, DashboardSpec } from "@/lib/domain/dashboard-spec";
-import { eq, and, gte, lte } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { eq, and, gte, lte, type SQL } from "drizzle-orm";
+import { requireOwnerTenant } from "@/lib/infra/auth";
+
+type GridRow = { row?: string; label?: string; staff?: string; target?: number | string; percent_achieved?: number; [col: string]: unknown };
+type ListItem = { key?: string; id?: string; label?: string; value?: number | string; [col: string]: unknown };
+type EventPayload = { grid?: GridRow[]; list?: ListItem[]; records?: unknown };
+type RawPoint = { date: string; entity: string; value: number; target: number };
 
 export async function POST(req: Request) {
   try {
     const spec: DashboardSpec = await req.json();
 
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) {
-      return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
-    }
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     if (!spec.widgets || spec.widgets.length === 0) {
       return NextResponse.json({ widgets: [] });
@@ -33,7 +37,7 @@ export async function POST(req: Request) {
       const startDate = new Date(start);
       const endDate = new Date(end);
 
-      const conditions: any[] = [
+      const conditions: SQL[] = [
         eq(events.tenantId, tenantId),
         gte(events.createdAt, startDate),
         lte(events.createdAt, endDate)
@@ -52,13 +56,13 @@ export async function POST(req: Request) {
       }
 
       // Aggregate data
-      let data: any = null;
+      let data: unknown = null;
 
       // Extract raw points depending on metric
-      const rawPoints: any[] = [];
+      const rawPoints: RawPoint[] = [];
       
       for (const ev of widgetEvents) {
-        const payload: any = ev.payload;
+        const payload = ev.payload as EventPayload | null;
         if (!payload) continue;
 
         const dayStr = new Date(ev.createdAt).toLocaleDateString("en-IN", { 
@@ -125,7 +129,7 @@ export async function POST(req: Request) {
             }
 
             let groupingEntity = "Submission";
-            if (widget.entity === "metric") groupingEntity = itemKey || item.label;
+            if (widget.entity === "metric") groupingEntity = itemKey || item.label || "Submission";
 
             rawPoints.push({
               date: dayStr,
@@ -154,10 +158,10 @@ export async function POST(req: Request) {
           acc[p.date].sum += p.value;
           acc[p.date].count++;
           return acc;
-        }, {} as Record<string, any>);
+        }, {} as Record<string, { sum: number; count: number }>);
         
         const dataPoints = Object.entries(byDate).map(([date, val]) => {
-          const st = val as any;
+          const st = val;
           return {
             date,
             value: widget.aggregation === 'avg' ? Math.round(st.sum / st.count) : st.sum
@@ -174,10 +178,10 @@ export async function POST(req: Request) {
           acc[e].sum += p.value;
           acc[e].count++;
           return acc;
-        }, {} as Record<string, any>);
+        }, {} as Record<string, { sum: number; count: number; target?: unknown }>);
 
         const entities = Object.entries(byEntity).map(([label, val]) => {
-          const st = val as any;
+          const st = val;
           return {
             label,
             value: widget.aggregation === 'avg' ? Math.round(st.sum / st.count) : st.sum,
@@ -198,8 +202,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ widgets: computedWidgets });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Dashboard Data Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to fetch data" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to fetch data" }, { status: 500 });
   }
 }

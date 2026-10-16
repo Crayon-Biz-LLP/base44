@@ -2,31 +2,18 @@
 // real production sandbox like a user: open asset → log reading → apply →
 // service state recomputes → set reading into the due window → banner fires →
 // status change via drawer → chips filter → spotlight → persistence → sync.
-import { chromium, type Frame, type Page } from "playwright-core";
+import {
+  BASE,
+  addOwnerSession,
+  artifactFrame,
+  createChecker,
+  launchBrowser,
+  requireEnv,
+  tenantOf,
+} from "./helpers/session.mts";
 
-const CR =
-  "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-const BASE = "http://localhost:3000";
-const WORKFLOW_ID = process.env.FL_WF || "";
-
-let failures = 0;
-let passes = 0;
-function check(name: string, ok: boolean, extra = "") {
-  if (ok) { passes++; console.log(`  ok  ${name} ${extra}`); }
-  else { failures++; console.log(`  FAIL  ${name} ${extra}`); }
-}
-
-async function artifactFrame(page: Page): Promise<Frame> {
-  for (let i = 0; i < 30; i++) {
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    if (frame) {
-      const ok = await frame.evaluate(() => !!document.body).catch(() => false);
-      if (ok) return frame;
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error("artifact iframe unavailable");
-}
+const WORKFLOW_ID = requireEnv("FL_WF");
+const { check, finish } = createChecker();
 
 // Globals inside the sandboxed artifact iframe (declared for TS only).
 declare const STATUSES: string[];
@@ -35,21 +22,13 @@ declare const state: { assets: { n: string; s: string; o: string; r: number }[] 
 
 async function main() {
   console.log("=== Fleet behavioral verification (headless Chromium) ===");
-  if (!WORKFLOW_ID) throw new Error("Set FL_WF=<workflow id>");
-  const browser = await chromium.launch({ executablePath: CR, headless: true });
+  const browser = await launchBrowser();
 
-  const wfRes = await fetch(`${BASE}/api/workflow/${WORKFLOW_ID}`);
-  const wf = await wfRes.json();
-  const tenantId = wf?.workflow?.tenantId as string | undefined;
+  const tenantId = await tenantOf(WORKFLOW_ID);
   check("workflow resolves", Boolean(tenantId));
 
   const context = await browser.newContext();
-  if (tenantId) {
-    await context.addInitScript(
-      ([tid, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); } catch {} },
-      [tenantId, JSON.stringify({ name: "E2E", role: "owner" })]
-    );
-  }
+  if (tenantId) await addOwnerSession(context, tenantId);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
 
@@ -59,8 +38,9 @@ async function main() {
   // 1. Grid renders; KPIs match.
   await f.locator("#agrid .acard").first().waitFor({ state: "visible", timeout: 15000 });
   const cards = await f.locator("#agrid .acard").count();
-  const kpiN = await f.locator("#kpiN").innerText();
-  check("fleet grid renders assets", cards >= 3 && Number(kpiN) === cards, `(${cards} assets)`);
+  await page.waitForTimeout(200);
+  const kpiN = (await f.locator("#kpiN").innerText()).replace(/[^0-9]/g, "");
+  check("fleet grid renders assets", cards >= 3 && Number(kpiN) === cards, `(${cards} assets, KPI ${kpiN})`);
 
   // 2. Status chips present; filter works (counts match the clicked label).
   const chipLabels = await f.locator("#chips .chip").evaluateAll(cs => cs.map(c => (c.textContent || "").trim()));
@@ -74,20 +54,24 @@ async function main() {
   await f.locator("#chips .chip").first().click();
   await page.waitForTimeout(200);
 
-  // 3. Open first asset → drawer focuses name input.
-  const firstName = (await f.locator("#agrid .acard .t").first().innerText()).trim();
-  await f.locator("#agrid .acard").first().click();
+  // 3. Open a NOT-yet-due asset → drawer focuses name input.
+  const notDue = f.locator(".acard:not(:has(.badge.svc-due))").first();
+  const firstName = (await notDue.locator(".t").innerText()).trim();
+  const byName = f.locator(".acard", { hasText: firstName }).first();
+  await notDue.click();
   await f.locator("#modal.open").waitFor({ state: "visible" });
   const focusId = await f.evaluate(() => (document.activeElement && document.activeElement.id) || "");
   check("drawer focuses name input", focusId === "editF0", focusId);
   const modalTitle = (await f.locator("#modalTitle").innerText()).trim();
   check("drawer shows the right asset", modalTitle === firstName, JSON.stringify(modalTitle));
 
-  // 4. Log a reading into the DUE window (interval - 5%) → badge flips to due.
+  // 4. Log a reading one full interval past the current one → crosses THIS
+  // asset's due window (service clock = meter − lastService), whatever the
+  // seed's lastService was.
   const interval = await f.evaluate(() => SERVICE_EVERY);
-  const dueReading = Math.ceil(interval * 0.97);
+  const curReading = await f.evaluate((n: string) => state.assets.find((a) => a.n === n)?.r ?? 0, firstName);
   const dueBefore = await f.locator("#kpiDue").innerText();
-  await f.locator("#editF2").fill(String(dueReading));
+  await f.locator("#editF2").fill(String(curReading + interval));
   await f.locator("#modal .btn.primary").click();
   await page.waitForTimeout(300);
   check("modal closes on Apply", (await f.locator("#modal.open").count()) === 0);
@@ -99,10 +83,10 @@ async function main() {
   const bannerText = bannerOpen ? await f.locator("#auditText").innerText() : "";
   check("service banner fires", bannerOpen === 1 && /service-due threshold/.test(bannerText), JSON.stringify(bannerText.slice(0, 60)));
 
-  // 5. Reset the reading to safe zone → due count drops, banner stays only if others still due.
-  await f.locator("#agrid .acard").first().click();
+  // 5. Restore the original reading → due count drops by one.
+  await byName.click();
   await f.locator("#modal.open").waitFor({ state: "visible" });
-  await f.locator("#editF2").fill(String(Math.ceil(interval * 0.5)));
+  await f.locator("#editF2").fill(String(curReading));
   await f.locator("#modal .btn.primary").click();
   await page.waitForTimeout(300);
   const dueFinal = await f.locator("#kpiDue").innerText();
@@ -158,8 +142,7 @@ async function main() {
   check("Engine 2: sync-state chip present after reload", (await f2.locator("#syncState").count()) === 1);
 
   await browser.close();
-  console.log(`\n${passes} passed, ${failures} failed`);
-  process.exit(failures > 0 ? 1 : 0);
+  finish();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

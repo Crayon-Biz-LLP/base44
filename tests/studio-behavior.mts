@@ -5,52 +5,32 @@
 // apply → MODAL CLOSES (the regression that shipped) → data + KPIs update.
 //
 // Run: npx tsx tests/studio-behavior.mts   (dev server must be up)
-import { chromium, type Frame, type Page } from "playwright-core";
+import {
+  BASE,
+  addOwnerSession,
+  artifactFrame,
+  createChecker,
+  launchBrowser,
+  requireEnv,
+  tenantOf,
+} from "./helpers/session.mts";
 
-const CR =
-  "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-const BASE = "http://localhost:3000";
-// The published Studio console workflow (scripts/publish-studio.mts).
-const WORKFLOW_ID = process.env.STUDIO_WF || "0b059c5d-9c7c-4ec8-a0c7-9b65e7a76617";
-
-let failures = 0;
-let passes = 0;
-function check(name: string, ok: boolean, extra = "") {
-  if (ok) { passes++; console.log(`  ok  ${name} ${extra}`); }
-  else { failures++; console.log(`  FAIL  ${name} ${extra}`); }
-}
-
-async function artifactFrame(page: Page): Promise<Frame> {
-  for (let i = 0; i < 30; i++) {
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    if (frame) {
-      const ok = await frame.evaluate(() => !!document.body).catch(() => false);
-      if (ok) return frame;
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error("artifact iframe unavailable");
-}
+// The published spatial console (scripts/seed-behavior.mts, SP_WF).
+const WORKFLOW_ID = requireEnv("SP_WF");
+const { check, finish } = createChecker();
 
 declare const state: { g: number; s: number; v0?: string; v1?: string; v2?: string; q?: string }[];
 
 async function main() {
   console.log("=== Studio behavioral verification (headless Chromium) ===");
-  const browser = await chromium.launch({ executablePath: CR, headless: true });
+  const browser = await launchBrowser();
 
   // Resolve the tenant so the staff gate is pre-authorized like a returning user.
-  const wfRes = await fetch(`${BASE}/api/workflow/${WORKFLOW_ID}`);
-  const wf = await wfRes.json();
-  const tenantId = wf?.workflow?.tenantId as string | undefined;
+  const tenantId = await tenantOf(WORKFLOW_ID);
   check("workflow resolves", Boolean(tenantId));
 
   const context = await browser.newContext();
-  if (tenantId) {
-    await context.addInitScript(
-      ([tid, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); } catch {} },
-      [tenantId, JSON.stringify({ name: "E2E", role: "owner" })]
-    );
-  }
+  if (tenantId) await addOwnerSession(context, tenantId);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
 
@@ -160,9 +140,14 @@ async function main() {
   // 8. Sync: the bridge path is wired (works fully once Engine 2 lands).
   await f.locator("#search").fill("");
   await f.locator("#syncBtn").click();
-  await page.waitForTimeout(1500);
-  const toastText = await f.locator("#toast").innerText().catch(() => "");
-  check("sync path reaches the host bridge", /Sync/i.test(toastText), JSON.stringify(toastText));
+  let toastText = "";
+  const syncDeadline = Date.now() + 8000;
+  while (Date.now() < syncDeadline) {
+    toastText = await f.locator("#toast").innerText().catch(() => "");
+    if (/Synced to OpsDesk|Saved locally/i.test(toastText) || /Sync failed/i.test(toastText)) break;
+    await page.waitForTimeout(250);
+  }
+  check("sync path reaches the host bridge", /Synced to OpsDesk|Saved locally/i.test(toastText) && !/Sync failed/i.test(toastText), JSON.stringify(toastText));
 
   // ── Engine 2: reload persistence — fresh edit → autosave → reload → ledger restore.
   if (!(await f.locator("#rackRows .card").first().isVisible().catch(() => false))) {
@@ -199,8 +184,7 @@ async function main() {
   check("Engine 2: sync-state chip present after reload", (await f2.locator("#syncState").count()) === 1);
 
   await browser.close();
-  console.log(`\n${passes} passed, ${failures} failed`);
-  process.exit(failures > 0 ? 1 : 0);
+  finish();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

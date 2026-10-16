@@ -103,11 +103,11 @@ EXAMPLE 3 (Invoice): "invoice form"
 
 let wireChecked = false;
 const origFetch = globalThis.fetch;
-globalThis.fetch = async (input: any, init?: any) => {
+globalThis.fetch = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
   if (!wireChecked && init?.body) {
     wireChecked = true;
     try {
-      const body = JSON.parse(init.body);
+      const body = JSON.parse(init.body as string);
       const gc = body.generationConfig ?? {};
       console.log(`[wire] mode=${jsonMode ? "JSON-only" : "structured-outputs"} responseMimeType=${gc.responseMimeType} responseSchema=${gc.responseSchema ? "SENT (" + JSON.stringify(gc.responseSchema).length + " chars)" : "omitted"}`);
     } catch {}
@@ -129,7 +129,7 @@ for (let i = 1; i <= samples; i++) {
       messages: [{ role: "user", content: prompt }],
     });
     ok++;
-    const ui = object.ui_schema as any;
+    const ui = object.ui_schema as { layout_type?: string; rows?: unknown; fields?: unknown } | undefined;
     console.log(`  run ${i}: SUCCESS in ${Date.now() - t0}ms — layout=${ui?.layout_type} rows=${JSON.stringify(ui?.rows)?.slice(0, 80)} fields=${Array.isArray(ui?.fields) ? ui.fields.length : typeof ui?.fields}`);
   } catch (e: unknown) {
     const err = e as { name?: string; message?: string; text?: string };

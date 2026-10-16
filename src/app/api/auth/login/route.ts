@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     await createOwnerSession(matchedTenants[0].id);
 
     return NextResponse.json({ success: true, tenantId: matchedTenants[0].id });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Login Error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

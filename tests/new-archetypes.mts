@@ -110,9 +110,9 @@ test("pipeline parts extension: bills total rate × qty per card", () => {
   const html = assemblePipeline(pipeline);
   // Bills are computed client-side from the PARTS/USES seed — so the test
   // evaluates the exact same math from the emitted literals (no browser).
-  const parts = JSON.parse(html.match(/var PARTS = (\[.*?\]);/)?.[1] || "[]");
-  const uses = JSON.parse(html.match(/var USES = (\[.*?\]);/)?.[1] || "[]");
-  const billOf = (t: string) => uses.filter((u: any) => u.c === t).reduce((s: number, u: any) => s + (parts.find((p: any) => p.n === u.p)?.r || 0) * u.q, 0);
+  const parts: { n: string; r: number }[] = JSON.parse(html.match(/var PARTS = (\[.*?\]);/)?.[1] || "[]");
+  const uses: { c: string; p: string; q: number }[] = JSON.parse(html.match(/var USES = (\[.*?\]);/)?.[1] || "[]");
+  const billOf = (t: string) => uses.filter((u) => u.c === t).reduce((s: number, u) => s + (parts.find((p) => p.n === u.p)?.r || 0) * u.q, 0);
   assert.equal(billOf("ORD-104 T-shirt run"), 300, "25×12 button set = ₹300");
   assert.equal(billOf("ORD-105 Kurti order"), 240, "40×6 zips = ₹240");
   assert.equal(billOf("ORD-102 Hotel linens"), 1080, "60×18 lining = ₹1080");

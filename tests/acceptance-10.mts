@@ -14,10 +14,52 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
 
 const BASE = "http://localhost:3000";
 
+type Cfg = {
+  groupCount?: number;
+  unitsPerGroup?: number;
+  field1?: { label?: string };
+  field3?: { label?: string };
+  categories?: unknown[];
+  qtyField?: { label?: string };
+  people?: unknown[];
+  metrics?: { target?: number }[];
+  stages?: { label?: string }[];
+  slaDays?: number;
+  items?: unknown[];
+  lowBalanceThreshold?: number;
+  accounts?: unknown[];
+  entryTypes?: unknown[];
+  entries?: unknown[];
+  resources?: { name?: string }[];
+  slots?: { resource?: string }[];
+  assets?: { owner?: string }[];
+  serviceEvery?: number;
+};
+
+type Row = {
+  n: number;
+  industry: string;
+  expect: string;
+  genMs: number;
+  totalMs: number;
+  route?: string;
+  product?: string;
+  syntax?: string;
+  syntaxErr?: string;
+  link?: string;
+  archetype?: string;
+  live?: string;
+  db?: string;
+  content?: string;
+  contentDetail?: string;
+  oneShot?: string;
+  time?: string;
+};
+
 type Check = { name: string; ok: boolean; got?: string };
 const ck = (name: string, ok: boolean, got?: unknown): Check => ({ name, ok, got: got === undefined ? undefined : String(got) });
 
-const SCENARIOS: { industry: string; prompt: string; expect: string; contentChecks: (cfg: any) => Check[] }[] = [
+const SCENARIOS: { industry: string; prompt: string; expect: string; contentChecks: (cfg: Cfg) => Check[] }[] = [
   {
     industry: "Sheet-metal factory (flagship)",
     prompt: "I run a sheet laser cutting factory. I have sheet stacking racks, 8 rows per rack and 30 such racks. I want to track what material, grade and thickness is stored in each row.",
@@ -48,7 +90,7 @@ const SCENARIOS: { industry: string; prompt: string; expect: string; contentChec
     contentChecks: (c) => [
       ck("6 salespeople", c.people?.length === 6, c.people?.length),
       ck("4 metrics", c.metrics?.length === 4, c.metrics?.length),
-      ck("targets 5/30/10/2", [5, 30, 10, 2].every(t => c.metrics?.some((m: any) => m.target === t)), c.metrics?.map((m: any) => m.target).join(",")),
+      ck("targets 5/30/10/2", [5, 30, 10, 2].every(t => !!c.metrics?.some((m) => m.target === t)), c.metrics?.map((m) => m.target).join(",")),
     ],
   },
   {
@@ -58,7 +100,7 @@ const SCENARIOS: { industry: string; prompt: string; expect: string; contentChec
     contentChecks: (c) => [
       ck("5 people", c.people?.length === 5, c.people?.length),
       ck("3 metrics", c.metrics?.length === 3, c.metrics?.length),
-      ck("premium target 80000", c.metrics?.some((m: any) => m.target === 80000), c.metrics?.map((m: any) => m.target).join(",")),
+      ck("premium target 80000", !!c.metrics?.some((m) => m.target === 80000), c.metrics?.map((m) => m.target).join(",")),
     ],
   },
   {
@@ -67,7 +109,7 @@ const SCENARIOS: { industry: string; prompt: string; expect: string; contentChec
     expect: "pipeline",
     contentChecks: (c) => [
       ck("5 stages", c.stages?.length === 5, c.stages?.length),
-      ck("stage named Cutting", c.stages?.some((s: any) => /cutting/i.test(s.label)), c.stages?.map((s: any) => s.label).join(">")),
+      ck("stage named Cutting", !!c.stages?.some((s) => /cutting/i.test(s.label ?? "")), c.stages?.map((s) => s.label).join(">")),
       ck("SLA 3 days", c.slaDays === 3, c.slaDays),
       ck("15 orders", c.items?.length === 15, c.items?.length),
     ],
@@ -78,7 +120,7 @@ const SCENARIOS: { industry: string; prompt: string; expect: string; contentChec
     expect: "pipeline",
     contentChecks: (c) => [
       ck("4 stages", c.stages?.length === 4, c.stages?.length),
-      ck("stage named Installed", c.stages?.some((s: any) => /install/i.test(s.label)), c.stages?.map((s: any) => s.label).join(">")),
+      ck("stage named Installed", !!c.stages?.some((s) => /install/i.test(s.label ?? "")), c.stages?.map((s) => s.label).join(">")),
       ck("SLA 2 days", c.slaDays === 2, c.slaDays),
       ck("20 jobs", c.items?.length === 20, c.items?.length),
     ],
@@ -101,7 +143,7 @@ const SCENARIOS: { industry: string; prompt: string; expect: string; contentChec
     contentChecks: (c) => [
       ck("3 chairs", c.resources?.length === 3, c.resources?.length),
       ck("bookings seeded", (c.slots?.length || 0) >= 18, c.slots?.length),
-      ck("bookings reference real chairs", (c.slots || []).every((s: any) => c.resources?.some((r: any) => r.name === s.resource)), "all-match"),
+      ck("bookings reference real chairs", (c.slots || []).every((s) => !!c.resources?.some((r) => r.name === s.resource)), "all-match"),
     ],
   },
   {
@@ -120,7 +162,7 @@ const SCENARIOS: { industry: string; prompt: string; expect: string; contentChec
     contentChecks: (c) => [
       ck("8 tractors", c.assets?.length === 8, c.assets?.length),
       ck("service every 500h", c.serviceEvery === 500, c.serviceEvery),
-      ck("owners assigned", (c.assets || []).every((a: any) => a.owner), "all-match"),
+      ck("owners assigned", (c.assets || []).every((a) => !!a.owner), "all-match"),
     ],
   },
 ];
@@ -136,11 +178,11 @@ async function main() {
   const existing = await db.select({ id: tenants.id }).from(tenants).limit(1);
   const tenantId = existing[0].id;
 
-  const results: any[] = [];
+  const results: Row[] = [];
   let idx = 0;
   for (const sc of SCENARIOS) {
     idx++;
-    const row: any = { n: idx, industry: sc.industry, expect: sc.expect };
+    const row: Row = { n: idx, industry: sc.industry, expect: sc.expect, genMs: 0, totalMs: 0 };
     try {
       const t0 = Date.now();
       // Criterion 2: routing (deterministic classifier, before any LLM spend)
@@ -155,7 +197,7 @@ async function main() {
       // Syntax gate
       writeFileSync("/tmp/console-syntax-check.js", gen.html.slice(gen.html.indexOf("<script>") + 8, gen.html.lastIndexOf("</script>")));
       let syntax = "PASS";
-      try { execSync("node --check /tmp/console-syntax-check.js", { stdio: "pipe" }); } catch (e: any) { syntax = "FAIL"; row.syntaxErr = (e.stderr?.toString() || "").slice(0, 200); }
+      try { execSync("node --check /tmp/console-syntax-check.js", { stdio: "pipe" }); } catch (e) { syntax = "FAIL"; row.syntaxErr = ((e as { stderr?: { toString(): string } }).stderr?.toString() || "").slice(0, 200); }
       row.syntax = syntax;
 
       // Publish (same shape as the publish script)
@@ -198,7 +240,7 @@ async function main() {
       // Criterion 3: content extraction (engine-consistent archetype + fields)
       const checks = [];
       checks.push(ck("engine archetype", gen.archetype === sc.expect, gen.archetype));
-      checks.push(...sc.contentChecks(gen.config));
+      checks.push(...sc.contentChecks(gen.config as Cfg));
       row.content = `${checks.filter(c => c.ok).length}/${checks.length}`;
       const failed = checks.filter(c => !c.ok);
       row.contentDetail = failed.length ? failed.map(f => `${f.name} (got ${f.got ?? "?"})`).join("; ") : "";
@@ -206,8 +248,8 @@ async function main() {
       row.oneShot = row.syntax === "PASS" ? "PASS" : "FAIL";
       row.totalMs = Date.now() - t0; // full loop incl. publish + live + DB probes
       row.time = `${(row.genMs / 1000).toFixed(1)}s engine / ${(row.totalMs / 1000).toFixed(1)}s total`;
-    } catch (e: any) {
-      row.oneShot = `FAIL(${String(e?.message || e).slice(0, 80)})`;
+    } catch (e) {
+      row.oneShot = `FAIL(${String((e as { message?: string })?.message || e).slice(0, 80)})`;
     }
     results.push(row);
     console.log(`[${idx}/10] ${sc.industry}`);
@@ -217,7 +259,7 @@ async function main() {
   }
 
   console.log("\n=== SUMMARY ===");
-  const pass = (v: string) => typeof v === "string" && v.startsWith("PASS");
+  const pass = (v: unknown) => typeof v === "string" && v.startsWith("PASS");
   for (const r of results) {
     const all = [r.route, r.oneShot, r.live, r.db].every(pass) && r.content && !r.content.startsWith("0/") && parseInt(r.content) >= 0;
     console.log(`${all ? "✅" : "❌"} #${r.n} ${r.industry} — ${r.link || "(no link)"}`);

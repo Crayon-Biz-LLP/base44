@@ -13,7 +13,7 @@ const { desc } = await import("drizzle-orm");
 
 // config is jsonb — filter in JS rather than fighting jsonb path operators.
 const recent = await db.select().from(workflows).orderBy(desc(workflows.createdAt)).limit(80);
-const rows = recent.filter((r: any) => String((r.config as any)?.title || "").includes("— Acceptance"));
+const rows = recent.filter((r) => String((r.config as { title?: string })?.title || "").includes("— Acceptance"));
 
 const BASE = "http://localhost:3000";
 const seen = new Set<string>();

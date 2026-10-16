@@ -1,6 +1,7 @@
 import { chromium, type Frame, type Page } from "playwright-core";
 
 const CR =
+  process.env.PLAYWRIGHT_CHROMIUM ||
   "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
 const BASE = "http://localhost:3000";
 const T_SALES = "68694f04-2be0-477e-a145-695e0adef927";

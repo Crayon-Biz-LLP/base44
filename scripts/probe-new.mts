@@ -36,21 +36,34 @@ const CASES = [
   },
 ];
 
+type Ac = {
+  counters?: { name?: string }[];
+  tokens?: unknown[];
+  avgMinutes?: number;
+  rounds?: { name?: string }[];
+  items?: unknown[];
+  staff?: { name?: string }[];
+  workers?: { name?: string; rate?: number }[];
+  unitLabel?: string;
+  events?: unknown[];
+  renewals?: { dueInDays?: number }[];
+};
+
 for (const c of CASES) {
   const t0 = Date.now();
   const route = pickArchetype(c.prompt);
   try {
     const gen = await generateConsoleForPrompt(c.prompt);
-    const ac: any = gen.config;
+    const ac = gen.config as Ac;
     writeFileSync(`/tmp/${c.file}.html`, gen.html);
     let extra = "";
-    if (gen.archetype === "queue") extra = `counters=[${(ac.counters || []).map((x: any) => x.name).join(",")}] tokens=${(ac.tokens || []).length} avgMin=${ac.avgMinutes}`;
-    if (gen.archetype === "checklist") extra = `rounds=[${(ac.rounds || []).map((x: any) => x.name).join(" | ")}] items=${(ac.items || []).length} staff=[${(ac.staff || []).map((x: any) => x.name).join(",")}]`;
-    if (gen.archetype === "roster") extra = `workers=${(ac.workers || []).length} rates=[${(ac.workers || []).map((x: any) => x.rate).join(",")}] unit=${ac.unitLabel}`;
-    if (gen.archetype === "calendar") extra = `events=${(ac.events || []).length} renewals=${(ac.renewals || []).length} dueIn=[${(ac.renewals || []).map((x: any) => x.dueInDays).join(",")}]`;
+    if (gen.archetype === "queue") extra = `counters=[${(ac.counters || []).map((x) => x.name).join(",")}] tokens=${(ac.tokens || []).length} avgMin=${ac.avgMinutes}`;
+    if (gen.archetype === "checklist") extra = `rounds=[${(ac.rounds || []).map((x) => x.name).join(" | ")}] items=${(ac.items || []).length} staff=[${(ac.staff || []).map((x) => x.name).join(",")}]`;
+    if (gen.archetype === "roster") extra = `workers=${(ac.workers || []).length} rates=[${(ac.workers || []).map((x) => x.rate).join(",")}] unit=${ac.unitLabel}`;
+    if (gen.archetype === "calendar") extra = `events=${(ac.events || []).length} renewals=${(ac.renewals || []).length} dueIn=[${(ac.renewals || []).map((x) => x.dueInDays).join(",")}]`;
     console.log(`✓ ${c.name} → ${gen.archetype} "${gen.productName}" (${Date.now() - t0}ms) | ${extra}`);
-  } catch (e: any) {
-    console.log(`✗ ${c.name}: classified ${route.id} but extraction failed: ${String(e?.message || e).slice(0, 140)}`);
+  } catch (e) {
+    console.log(`✗ ${c.name}: classified ${route.id} but extraction failed: ${String((e as { message?: string })?.message || e).slice(0, 140)}`);
   }
 }
 process.exit(0);

@@ -2,51 +2,30 @@
 // the real sandbox like a user: +New card → apply → appears; open card →
 // Complete → final stage; open card → Remove → gone; reload → restored from
 // the server ledger. Content-agnostic.
-import { chromium, type Frame, type Page } from "playwright-core";
+import {
+  BASE,
+  addOwnerSession,
+  artifactFrame,
+  createChecker,
+  launchBrowser,
+  requireEnv,
+  tenantOf,
+} from "./helpers/session.mts";
 
-const CR =
-  "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-const BASE = "http://localhost:3000";
-const WORKFLOW_ID = process.env.PL_WF || "";
-
-let failures = 0;
-let passes = 0;
-function check(name: string, ok: boolean, extra = "") {
-  if (ok) { passes++; console.log(`  ok  ${name} ${extra}`); }
-  else { failures++; console.log(`  FAIL  ${name} ${extra}`); }
-}
-
-async function artifactFrame(page: Page): Promise<Frame> {
-  for (let i = 0; i < 30; i++) {
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    if (frame) {
-      const ok = await frame.evaluate(() => !!document.body).catch(() => false);
-      if (ok) return frame;
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error("artifact iframe unavailable");
-}
+const WORKFLOW_ID = requireEnv("PL_WF");
+const { check, finish } = createChecker();
 
 declare const state: { items: { t: string; s: number; d: number }[] };
 
 async function main() {
   console.log("=== Lifecycle behavioral verification (pipeline console) ===");
-  if (!WORKFLOW_ID) throw new Error("Set PL_WF=<workflow id>");
-  const browser = await chromium.launch({ executablePath: CR, headless: true });
+  const browser = await launchBrowser();
 
-  const wfRes = await fetch(`${BASE}/api/workflow/${WORKFLOW_ID}`);
-  const wf = await wfRes.json();
-  const tenantId = wf?.workflow?.tenantId as string | undefined;
+  const tenantId = await tenantOf(WORKFLOW_ID);
   check("workflow resolves", Boolean(tenantId));
 
   const context = await browser.newContext();
-  if (tenantId) {
-    await context.addInitScript(
-      ([tid, sess]) => { try { localStorage.setItem(`staff_${tid}`, sess!); } catch {} },
-      [tenantId, JSON.stringify({ name: "E2E", role: "owner" })]
-    );
-  }
+  if (tenantId) await addOwnerSession(context, tenantId);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   await page.goto(`${BASE}/app/${WORKFLOW_ID}`, { waitUntil: "domcontentloaded" });
@@ -99,8 +78,7 @@ async function main() {
   check("removed card stays removed after reload", (await f2.locator(".pcard", { hasText: "LC Test Bike — New Job" }).count()) === 0);
 
   await browser.close();
-  console.log(`\n${passes} passed, ${failures} failed`);
-  if (failures) process.exit(1);
+  finish();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

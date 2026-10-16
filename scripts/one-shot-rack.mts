@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Manifest } from "../src/lib/domain/manifest";
+import type { DateRule } from "../src/lib/domain/cube/dates";
 
 // 1. Environment first (same pattern as backfill-app.mts) — must precede the
 // dynamic imports below, since ai.ts reads keys at module scope.
@@ -24,6 +25,15 @@ const { resolveDateRule } = await import("../src/lib/domain/cube/dates");
 const { z } = await import("zod");
 
 const RACK_PROMPT = `I run a sheet lazer cutting factory. I have sheet stacking racks, 8 rows per rack and 30 such racks, i want to track what material, grade and thickness is stored in each of the rows in these 30 racks. Eventually I want to manage the storage efficiently. Build me a form or an app for this.`;
+
+type LooseRow = { label?: string; key?: string; dateRule?: DateRule };
+type LooseSchema = {
+  layout_type?: string;
+  intelligence?: { entities?: unknown[] };
+  rows?: LooseRow[];
+  columns?: unknown[];
+  fields?: unknown[];
+};
 
 // ---- Verbatim from src/app/api/chat/route.ts (context + system) ------------
 const today = new Date();
@@ -121,7 +131,7 @@ const SinglePassSchema = z.object({
   ui_schema: (await import("../src/lib/domain/manifest")).ManifestSchema.optional(),
 });
 
-const messages = [{ role: "user", content: RACK_PROMPT }];
+const messages = [{ role: "user" as const, content: RACK_PROMPT }];
 const userPrompt = RACK_PROMPT;
 
 // ---- Step 1: manifest (single call + production repair loop) ---------------
@@ -154,21 +164,21 @@ if (extraction.needs_clarification === true || !extraction.ui_schema) {
   process.exit(0);
 }
 
-let processedSchema: any = extraction.ui_schema;
+let processedSchema: LooseSchema = extraction.ui_schema as LooseSchema;
 
 // ---- Post-processing (verbatim order from the route) -----------------------
 if (!processedSchema.intelligence) processedSchema.intelligence = {};
-if (!processedSchema.intelligence.entities) {
-  if (processedSchema.layout_type === "grid" && processedSchema.rows && !processedSchema.rows.some((r: any) => r.dateRule)) {
-    processedSchema.intelligence.entities = processedSchema.rows.map((r: any) => ({ label: r.label, key: r.key || deriveKey(r.label) }));
+if (!processedSchema.intelligence?.entities) {
+  if (processedSchema.layout_type === "grid" && processedSchema.rows && !processedSchema.rows.some((r) => r.dateRule)) {
+    processedSchema.intelligence.entities = processedSchema.rows.map((r) => ({ label: r.label, key: r.key || deriveKey(r.label ?? "") }));
   }
 }
 
 if (processedSchema.layout_type === "grid" && processedSchema.rows) {
-  const expandedRows: any[] = [];
+  const expandedRows: LooseRow[] = [];
   for (const row of processedSchema.rows) {
     if (row.dateRule) {
-      const dates = resolveDateRule(row.dateRule as any, "Asia/Kolkata");
+      const dates = resolveDateRule(row.dateRule, "Asia/Kolkata");
       for (const d of dates) {
         expandedRows.push({ ...row, dateRule: undefined, label: d.label, key: deriveKey(d.label) });
       }
@@ -179,9 +189,9 @@ if (processedSchema.layout_type === "grid" && processedSchema.rows) {
   processedSchema.rows = expandedRows;
 }
 
-processedSchema = ensureCanonicalKeys(processedSchema) as Manifest;
+processedSchema = ensureCanonicalKeys(processedSchema as Manifest) as LooseSchema;
 
-const guardrail = applyGuardrails(processedSchema, userPrompt, { enforceEntryMode: true });
+const guardrail = applyGuardrails(processedSchema as Manifest, userPrompt, { enforceEntryMode: true });
 processedSchema = guardrail.schema;
 if (guardrail.fixes.length > 0) console.log("[Guardrails] Fixes:", guardrail.fixes);
 if (guardrail.errors.length > 0) console.warn("[Guardrails] Residual integrity errors (safety-netted):", guardrail.errors);
@@ -189,7 +199,7 @@ if (guardrail.errors.length > 0) console.warn("[Guardrails] Residual integrity e
 // ---- Phase 2: artifact (single call) ---------------------------------------
 let artifactHtml: string | undefined;
 try {
-  artifactHtml = await generateArtifact({ userPrompt, title: extraction.form_title || "", schema: processedSchema });
+  artifactHtml = await generateArtifact({ userPrompt, title: extraction.form_title || "", schema: processedSchema as Manifest });
   if (artifactHtml) console.log("[Artifact] Generated HTML length:", artifactHtml.length);
 } catch (e) {
   console.warn("[Artifact] Generation failed, falling back to manifest renderer:", e);
@@ -214,7 +224,7 @@ if (existingTenants.length > 0) {
 
 const inserted = await db.insert(workflows).values({
   tenantId,
-  primitiveType: processedSchema.layout_type,
+  primitiveType: processedSchema.layout_type ?? "grid",
   config: { title: extraction.form_title, schema: processedSchema, userPrompt, ...(artifactHtml ? { artifactHtml } : {}) },
   schemaVersion: 5,
   isActive: false,

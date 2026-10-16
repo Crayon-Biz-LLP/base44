@@ -2,19 +2,21 @@ import { google } from "@ai-sdk/google";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { NextResponse } from "next/server";
-import { DashboardSpecSchema } from "@/lib/domain/dashboard-spec";
+import { DashboardSpecSchema, type DashboardSpec } from "@/lib/domain/dashboard-spec";
 import { eq, and } from "drizzle-orm";
 import { generateWithRepair } from "@/lib/infra/repair";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
+
+type SchemaShape = { layout_type?: string; rows?: { label?: string }[]; fields?: { label?: string }[] };
+type ConfigShape = { title?: string; schema?: SchemaShape };
 
 export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
 
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) {
-      return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
-    }
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     // Fetch tenant's active workflows for LLM context
     const tenantWorkflows = await db.select().from(workflows).where(
@@ -28,16 +30,16 @@ export async function POST(req: Request) {
     }
 
     const workflowContext = tenantWorkflows.map(w => {
-      const c = w.config as any;
-      const s = c.schema;
+      const c = w.config as ConfigShape;
+      const s = c.schema ?? {};
       return {
         workflowId: w.id,
         title: c.title,
         layout_type: s.layout_type,
         // Expose available row labels or field labels so LLM knows what metrics exist
         metrics: s.layout_type === 'grid' 
-          ? s.rows?.map((r:any) => r.label) 
-          : s.fields?.map((f:any) => f.label)
+          ? s.rows?.map((r) => r.label) 
+          : s.fields?.map((f) => f.label)
       };
     });
 
@@ -48,7 +50,7 @@ export async function POST(req: Request) {
       timeStyle: "long",
     });
 
-    const object = await generateWithRepair<any>({
+    const object = await generateWithRepair<DashboardSpec>({
       model: google("gemini-3.1-flash-lite"),
       system: `You are a Dashboard Compiler for an operations platform.
       Your job is to read the owner's request (e.g., "Ramesh vs Suresh last 7 days", "Today's summary") and build a JSON dashboard spec.
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
 
     // Post-validation: ensure workflowIds actually exist for this tenant
     const validIds = new Set(tenantWorkflows.map(w => w.id));
-    const validWidgets = object.widgets.filter((w: any) => !w.workflowId || validIds.has(w.workflowId));
+    const validWidgets = object.widgets.filter((w) => !w.workflowId || validIds.has(w.workflowId));
 
     return NextResponse.json({
       success: true,
@@ -82,8 +84,8 @@ export async function POST(req: Request) {
       workflowIds: Array.from(validIds) // return valid ids for harness testing
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Dashboard Generate Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to generate dashboard" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to generate dashboard" }, { status: 500 });
   }
 }

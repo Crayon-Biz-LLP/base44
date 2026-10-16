@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "prepare": "git config core.hooksPath .githooks || true",
     "lint": "eslint",
     "test:prompts": "node tests/regression.mjs",
     "test:dashboards": "node tests/dashboard-regression.mjs",
@@ -15,7 +16,10 @@
     "backfill:app": "tsx scripts/backfill-app.mts",
     "sweep:guardrails": "tsx scripts/guardrail-sweep.mts",
     "test:renderer": "tsx tests/renderer.mts",
-    "test:e2e": "tsx tests/e2e-v5.mts"
+    "test:e2e": "tsx tests/e2e-v5.mts",
+    "seed:behavior": "tsx scripts/seed-behavior.mts",
+    "test:behavior": "tsx scripts/seed-behavior.mts && tsx tests/behavior-all.mts",
+    "test:all": "npm run test:unit && npm run test:zero-llm && npm run test:renderer && npm run test:dashboards && npm run test:behavior"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.67",

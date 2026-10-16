@@ -37,8 +37,8 @@ const { execSync } = await import("node:child_process");
 try {
   execSync("node --check /tmp/console-syntax-check.js", { stdio: "pipe" });
   console.log("  syntax gate: PASS");
-} catch (e: any) {
-  console.error("  syntax gate: FAIL — emitted console has a JS syntax error:\n", e.stderr?.toString());
+} catch (e) {
+  console.error("  syntax gate: FAIL — emitted console has a JS syntax error:\n", (e as { stderr?: { toString(): string } }).stderr?.toString());
   process.exit(1);
 }
 

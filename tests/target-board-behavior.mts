@@ -1,81 +1,68 @@
 // Behavioral verification for Target Board consoles — operates the board in
 // the real production sandbox like a user: click cell → report number → apply
 // → modal closes → cell color flips → KPIs recompute → TEAM totals update.
-import { chromium, type Frame, type Page } from "playwright-core";
+import {
+  BASE,
+  addOwnerSession,
+  artifactFrame,
+  createChecker,
+  launchBrowser,
+  requireEnv,
+  tenantOf,
+} from "./helpers/session.mts";
 
-const CR =
-  "/Users/danielyashwant/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-const BASE = "http://localhost:3000";
-const WORKFLOW_ID = process.env.TB_WF || "";
+const WORKFLOW_ID = requireEnv("TB_WF");
+const { check, finish } = createChecker();
 
-let failures = 0;
-let passes = 0;
-function check(name: string, ok: boolean, extra = "") {
-  if (ok) { passes++; console.log(`  ok  ${name} ${extra}`); }
-  else { failures++; console.log(`  FAIL  ${name} ${extra}`); }
-}
-
-async function artifactFrame(page: Page): Promise<Frame> {
-  for (let i = 0; i < 30; i++) {
-    const frame = page.frames().find((f) => f !== page.mainFrame());
-    if (frame) {
-      const ok = await frame.evaluate(() => !!document.body).catch(() => false);
-      if (ok) return frame;
-    }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  throw new Error("artifact iframe unavailable");
-}
-
+// Globals inside the sandboxed artifact iframe (declared for TS only).
+declare const PEOPLE: string[];
+declare const METRICS: { k: string; l: string; t: number }[];
 declare const state: Record<string, string>;
 
 async function main() {
   console.log("=== Target Board behavioral verification (headless Chromium) ===");
-  if (!WORKFLOW_ID) throw new Error("Set TB_WF=<workflow id>");
-  const browser = await chromium.launch({ executablePath: CR, headless: true });
+  const browser = await launchBrowser();
 
-  const wfRes = await fetch(`${BASE}/api/workflow/${WORKFLOW_ID}`);
-  const wf = await wfRes.json();
-  const tenantId = wf?.workflow?.tenantId as string | undefined;
+  const tenantId = await tenantOf(WORKFLOW_ID);
   check("workflow resolves", Boolean(tenantId));
 
   const context = await browser.newContext();
-  if (tenantId) {
-    await context.addInitScript(
-      ([tid, sname]) => { try { localStorage.setItem(`staff_${tid}`, sname!); } catch {} },
-      [tenantId, "TB E2E"]
-    );
-  }
+  if (tenantId) await addOwnerSession(context, tenantId);
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
 
   await page.goto(`${BASE}/app/${WORKFLOW_ID}`, { waitUntil: "domcontentloaded" });
   const f = await artifactFrame(page);
 
-  // 1. Board renders: 4 employee rows × 8 metric columns.
+  // 1. Board renders: one row per roster member (TEAM row optional) × metric columns.
   await f.locator("#tbody tr").first().waitFor({ state: "visible", timeout: 15000 });
+  const roster = await f.evaluate(() => PEOPLE);
+  const metrics = await f.evaluate(() => METRICS);
+  const firstPerson = roster[0];
+  const firstMetric = metrics[0];
+  check("board exposes roster + metrics", roster.length > 0 && metrics.length > 0, `(${roster.length} people, ${metrics.length} metrics)`);
   const rowCards = await f.locator("#tbody tr").count();
-  check("board renders employee rows", rowCards >= 4, `(${rowCards} rows incl. TEAM)`);
-  const th = await f.locator("#thead").innerText();
-  check("metric columns with targets", /new\s*\/3/i.test(th.replace(/\s+/g, " ")), JSON.stringify(th.slice(0, 80)));
+  check("board renders employee rows", rowCards >= roster.length, `(${rowCards} rows incl. TEAM)`);
+  const th = (await f.locator("#thead").innerText()).replace(/\s+/g, " ");
+  check("metric columns carry targets", new RegExp(`${firstMetric.l}\\s*/\\s*${firstMetric.t}`, "i").test(th), JSON.stringify(th.slice(0, 80)));
 
   // 2. Click a cell → drawer focuses the actual input.
-  await f.locator('.cell[data-p="Bhuvana"][data-k="new"]').click();
+  await f.locator(`.cell[data-p="${firstPerson}"][data-k="${firstMetric.k}"]`).click();
   await f.locator("#modal.open").waitFor({ state: "visible" });
   check("cell drawer opens", true);
   const focusId = await f.evaluate(() => (document.activeElement && document.activeElement.id) || "");
   check("drawer focuses actual input", focusId === "editF0", focusId);
   const tgt = await f.locator("#modalTarget").innerText();
-  check("drawer shows target", /Target:\s*3/.test(tgt), JSON.stringify(tgt));
+  check("drawer shows target", new RegExp(`Target:\\s*${firstMetric.t}\\b`).test(tgt), JSON.stringify(tgt));
 
   // 3. Report a number → modal closes, cell turns ok, KPIs recompute.
   const repBefore = await f.locator("#kpiRep").innerText();
-  await f.locator("#editF0").fill("3");
+  await f.locator("#editF0").fill(String(firstMetric.t));
   await f.locator("#modal .btn.primary").click();
   await page.waitForTimeout(300);
   check("modal closes on Apply", (await f.locator("#modal.open").count()) === 0);
-  const cellTxt = await f.locator('.cell[data-p="Bhuvana"][data-k="new"]').innerText();
-  check("edit landed with achievement", /3/.test(cellTxt) && /100%/.test(cellTxt), JSON.stringify(cellTxt));
+  const cellTxt = await f.locator(`.cell[data-p="${firstPerson}"][data-k="${firstMetric.k}"]`).innerText();
+  check("edit landed at target (100%)", cellTxt.includes(String(firstMetric.t)) && /100%/.test(cellTxt), JSON.stringify(cellTxt));
   const repAfter = await f.locator("#kpiRep").innerText();
   check("Reported-Today KPI recomputed", repBefore !== repAfter, `${repBefore} → ${repAfter}`);
   const toastVisible = await f.locator("#toast.open").count();
@@ -86,7 +73,7 @@ async function main() {
   check("TEAM totals row present", /TEAM/.test(teamRow));
 
   // 5. Spotlight search dims non-matching cells.
-  await f.locator("#search").fill("Chronic");
+  await f.locator("#search").fill(firstPerson);
   await page.waitForTimeout(200);
   const dimmed = await f.locator(".cell.dim").count();
   const hits = await f.locator(".cell.hit").count();
@@ -115,7 +102,7 @@ async function main() {
   // ── Engine 2: reload persistence — fresh edit → debounced autosave → reload
   // → restored from the server ledger. A fresh iframe has an EMPTY storage
   // shim, so anything present after reload came via __opsDeskLoad__.
-  await f.locator('.cell[data-p="Bhuvana"][data-k="new"]').click();
+  await f.locator(`.cell[data-p="${firstPerson}"][data-k="${firstMetric.k}"]`).click();
   await f.locator("#modal.open").waitFor({ state: "visible" });
   await f.locator("#editF0").fill("7");
   await f.locator("#modal .btn.primary").click();
@@ -139,8 +126,7 @@ async function main() {
   check("Engine 2: sync-state chip present after reload", (await f2.locator("#syncState").count()) === 1);
 
   await browser.close();
-  console.log(`\n${passes} passed, ${failures} failed`);
-  process.exit(failures > 0 ? 1 : 0);
+  finish();
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

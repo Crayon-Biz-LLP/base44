@@ -1,6 +1,6 @@
-import { create, all } from 'mathjs';
+import { create, all, type MathNode } from 'mathjs';
 
-const math = create(all, {}) as any;
+const math = create(all, {});
 
 export function evaluateFormula(expression: string, scope: Record<string, number>): number {
   const safeScope = Object.fromEntries(
@@ -11,19 +11,21 @@ export function evaluateFormula(expression: string, scope: Record<string, number
     const node = math.parse(expression);
     
     // Validate that the tree only contains allowed node types and functions
-    node.traverse(function (n: any) {
+    node.traverse(function (n: MathNode) {
       switch (n.type) {
         case 'OperatorNode':
         case 'ConstantNode':
         case 'SymbolNode':
         case 'ParenthesisNode':
           break;
-        case 'FunctionNode':
+        case 'FunctionNode': {
           const allowedFns = ['add', 'subtract', 'multiply', 'divide', 'round', 'min', 'max', 'abs'];
-          if (!allowedFns.includes(n.fn.name)) {
-             throw new Error(`Unauthorized function: ${n.fn.name}`);
+          const fnName = (n as unknown as { fn: { name: string } }).fn.name;
+          if (!allowedFns.includes(fnName)) {
+             throw new Error(`Unauthorized function: ${fnName}`);
           }
           break;
+        }
         default:
           throw new Error(`Unauthorized operation: ${n.type}`);
       }
@@ -32,12 +34,12 @@ export function evaluateFormula(expression: string, scope: Record<string, number
     const compiled = node.compile();
     const result = compiled.evaluate(safeScope);
     return Number(result);
-  } catch (e: any) {
-    throw new Error(`Failed to evaluate formula '${expression}': ${e.message}`);
+  } catch (e) {
+    throw new Error(`Failed to evaluate formula '${expression}': ${(e as { message?: string }).message}`);
   }
 }
 
-export function checkInvariant(left: any, op: string, right: any): boolean {
+export function checkInvariant(left: unknown, op: string, right: unknown): boolean {
   if (op === 'not_null') {
     return left !== null && left !== undefined && left !== "" && !Number.isNaN(left);
   }

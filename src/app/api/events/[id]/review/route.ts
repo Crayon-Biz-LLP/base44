@@ -2,15 +2,16 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const tenantId = await getSessionTenantId();
-  if (!tenantId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const guard = await requireOwnerTenant();
+  if (!guard.ok) return guard.response;
+  const tenantId = guard.tenantId;
 
   const body = await req.json();
   const action = body?.action;

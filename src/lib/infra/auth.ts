@@ -1,27 +1,30 @@
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { signOwnerValue, verifyOwnerValue, OWNER_COOKIE_NAME } from "./app-auth";
 
-const COOKIE_NAME = "opsdesk_tenant_id";
-
-// Returns tenant ID if logged in, otherwise undefined
-export async function getSessionTenantId() {
+// Returns tenant ID if logged in, otherwise undefined. The cookie is an
+// HMAC-signed value (v1.<tenantId>.<hmac>); a forged/unsigned cookie fails
+// verification and is treated as logged out.
+export async function getSessionTenantId(): Promise<string | undefined> {
   const cookieStore = await cookies();
-  const tenantId = cookieStore.get(COOKIE_NAME)?.value;
+  const raw = cookieStore.get(OWNER_COOKIE_NAME)?.value;
+  if (!raw) return undefined;
+
+  const tenantId = verifyOwnerValue(raw);
   if (!tenantId) return undefined;
-  
+
   // Verify tenant exists
-  const res = await db.select().from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  const res = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
   if (res.length === 0) return undefined;
   return tenantId;
 }
 
-// In a real app we would sign the cookie with an HMAC, but for a simple demo 
-// and internal routing this plaintext cookie is sufficient and keeps things lightweight.
 export async function createOwnerSession(tenantId: string) {
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, tenantId, {
+  cookieStore.set(OWNER_COOKIE_NAME, signOwnerValue(tenantId), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -32,5 +35,18 @@ export async function createOwnerSession(tenantId: string) {
 
 export async function clearSession() {
   const cookieStore = await cookies();
-  cookieStore.delete(COOKIE_NAME);
+  cookieStore.delete(OWNER_COOKIE_NAME);
+}
+
+// Single owner guard for route handlers: either the verified tenant id, or the
+// 401 response to return. Collapses the hand-rolled `getSessionTenantId() + if
+// (!tenantId) return 401` block that was duplicated across every dashboard API.
+export type OwnerGuard = { ok: true; tenantId: string } | { ok: false; response: NextResponse };
+
+export async function requireOwnerTenant(): Promise<OwnerGuard> {
+  const tenantId = await getSessionTenantId();
+  if (!tenantId) {
+    return { ok: false, response: NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 }) };
+  }
+  return { ok: true, tenantId };
 }

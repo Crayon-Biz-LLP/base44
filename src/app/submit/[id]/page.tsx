@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
-import { migrateCubeToNative } from "@/lib/domain/manifest";
+import { migrateCubeToNative, type Manifest } from "@/lib/domain/manifest";
 import { safeJson } from "@/lib/infra/fetch";
 import { ListForm } from "@/components/forms/ListForm";
 import { GridForm } from "@/components/forms/GridForm";
@@ -11,13 +11,19 @@ import { ScanCapture } from "@/components/forms/ScanCapture";
 import { Card, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { FormState } from "@/components/forms/FieldInput";
+
+type SubmitWorkflow = {
+  tenantId?: string;
+  config?: { title?: string; layout_type?: string; artifactHtml?: string; schema?: Manifest };
+};
 
 export default function SubmitPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const { id } = resolvedParams;
-  const [workflow, setWorkflow] = useState<any>(null);
-  const [schema, setSchema] = useState<any>(null);
-  const [formState, setFormState] = useState<any>({});
+  const [workflow, setWorkflow] = useState<SubmitWorkflow | null>(null);
+  const [schema, setSchema] = useState<Manifest | null>(null);
+  const [formState, setFormState] = useState<FormState>({});
   
   // Staff Gate State
   const [staffName, setStaffName] = useState<string>("");
@@ -79,17 +85,17 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
       const res = await fetch("/api/workflow/staff-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin, staffName, tenantId: workflow.tenantId })
+        body: JSON.stringify({ pin, staffName, tenantId: workflow?.tenantId })
       });
       const data = await safeJson(res);
       if (!data.success) throw new Error(data.error || "Invalid PIN");
       
-      localStorage.setItem(`staff_${workflow.tenantId}`, staffName);
+      localStorage.setItem(`staff_${workflow?.tenantId}`, staffName);
       setIsStaffVerified(true);
       setShowGate(false);
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Something went wrong");
     } finally {
       setIsLoading(false);
     }
@@ -103,7 +109,7 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workflowId: id,
-          layout_type: schema.layout_type,
+          layout_type: schema?.layout_type,
           actuals: formState,
           filledBy: staffName
         })
@@ -114,8 +120,8 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
       localStorage.removeItem(`draft_${id}`);
       setSuccess(true);
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError((err as { message?: string }).message ?? "Failed to submit");
       setIsSubmitting(false);
     }
   };
@@ -123,8 +129,10 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
   // Merge a photo-scan extraction into the native form state (honest prefill —
   // the staff confirms on the real form and the real /api/submit-form saves it).
   const applyScanPayload = (payload: Record<string, unknown>, meta: { count: number; confidence: number; mathVerified: boolean; flags: string[] }) => {
-    const isGrid = schema.layout_type === "grid";
-    setFormState((prev: any) => {
+    const isGrid = schema?.layout_type === "grid";
+    const entryMode = schema && "entryMode" in schema ? schema.entryMode : undefined;
+    const personaRowKey = entryMode === "personal" ? staffName : undefined;
+    setFormState((prev) => {
       const next = { ...prev };
       if (!isGrid) {
         // list → flat { fieldKey: value }
@@ -134,20 +142,21 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
         return next;
       }
       // grid → { colKey: { rowKey: value } } (transpose into { rowKey: { colKey } }).
-      const personaRowKey = schema.entryMode === "personal" ? staffName : undefined;
       let usedRow: string | undefined = personaRowKey;
       for (const [colKey, rowVal] of Object.entries(payload)) {
         if (rowVal && typeof rowVal === "object") {
           for (const [rowKey, val] of Object.entries(rowVal as Record<string, unknown>)) {
             if (val === null || val === undefined) continue;
-            next[rowKey] ??= {};
-            next[rowKey][colKey] = String(val);
-            usedRow = usedRow || rowKey as string;
+            const row = (next[rowKey] as Record<string, string> | undefined) ?? {};
+            row[colKey] = String(val);
+            next[rowKey] = row;
+            usedRow = usedRow || rowKey;
           }
         } else if (rowVal !== null && rowVal !== undefined) {
           const rowKey = personaRowKey || usedRow || "line_0";
-          next[rowKey] ??= {};
-          next[rowKey][colKey] = String(rowVal);
+          const row = (next[rowKey] as Record<string, string> | undefined) ?? {};
+          row[colKey] = String(rowVal);
+          next[rowKey] = row;
         }
       }
       return next;
@@ -187,7 +196,7 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
               {schema?.layout_type === "grid" && schema?.entryMode === "personal" ? (
                  <select value={staffName} onChange={e => setStaffName(e.target.value)} required className="w-full p-2 border rounded-lg bg-white">
                     <option value="" disabled>Select your name...</option>
-                    {schema.rows?.map((r:any, i:number) => <option key={i} value={r.key || r.label}>{r.label}</option>)}
+                    {schema.rows?.map((r, i:number) => <option key={i} value={r.key || r.label}>{r.label}</option>)}
                  </select>
               ) : (
                  <Input value={staffName} onChange={e => setStaffName(e.target.value)} required placeholder="Enter your full name" />
@@ -213,7 +222,7 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit' });
   const closeBy = schema.schedule?.closeBy;
-  const isClosed = closeBy && timeStr > closeBy;
+  const isClosed = !!closeBy && timeStr > closeBy;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
@@ -245,7 +254,7 @@ export default function SubmitPage({ params }: { params: Promise<{ id: string }>
           <div className="space-y-8">
             {(schema.layout_type === "list" || schema.layout_type === "grid") && (
               <div className="flex flex-wrap items-center gap-3 justify-between">
-                <ScanCapture schema={schema} config={workflow.config} onExtracted={applyScanPayload} />
+                <ScanCapture schema={schema} config={workflow?.config ?? {}} onExtracted={applyScanPayload} />
                 {artifactHtml && scanMode && (
                   <button
                     type="button"

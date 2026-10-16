@@ -10,7 +10,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/infra/auth";
 import { resolveServeRow, insertDraftVersion } from "@/lib/infra/lineage";
 import { gateConsole } from "@/lib/infra/edit-pipeline";
 import type { ArchetypeId } from "@/lib/infra/archetypes";
@@ -25,8 +25,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const version = Number(body?.version);
     if (!Number.isFinite(version)) return NextResponse.json({ error: "Missing version to restore" }, { status: 400 });
 
-    const tenantId = await getSessionTenantId();
-    if (!tenantId) return NextResponse.json({ error: "Unauthorized. Please log in." }, { status: 401 });
+    const guard = await requireOwnerTenant();
+    if (!guard.ok) return guard.response;
+    const tenantId = guard.tenantId;
 
     const serve = await resolveServeRow(id);
     if (!serve) return NextResponse.json({ error: "Not found" }, { status: 404 });
