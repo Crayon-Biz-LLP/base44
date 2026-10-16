@@ -50,7 +50,7 @@ change costs trust.
 ## Project Overview
 Next.js 16 + TypeScript + Drizzle ORM on Neon Postgres + Vercel AI SDK.
 The Automated Nightly Operations Director for 5–15 branch retail operators. This repo is a work in progress; the canonical product
-reference lives in `../Revised Deck.html` and `docs/`.
+reference lives in `Revised Deck.html` (repo root) and `docs/`.
 
 ## Codebase Discovery Workflow
 
