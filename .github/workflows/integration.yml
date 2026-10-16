@@ -1,0 +1,67 @@
+name: Integration
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *" # nightly, 03:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: renderer + dashboards + behavior
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      APP_SECRET: ${{ secrets.APP_SECRET }}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+      OPSDESK_BASE: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Provision env + browser path
+        run: |
+          CHROME=$(find "$HOME/.cache/ms-playwright" -type f -name chrome -path '*chrome-linux*' | head -n1)
+          echo "PLAYWRIGHT_CHROMIUM=$CHROME" >> "$GITHUB_ENV"
+          {
+            echo "DATABASE_URL=${DATABASE_URL}"
+            echo "APP_SECRET=${APP_SECRET}"
+            echo "GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}"
+          } > .env.local
+
+      - name: Start dev server
+        run: |
+          npm run dev > /tmp/dev.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 > /dev/null; then echo "server up"; exit 0; fi
+            sleep 2
+          done
+          echo "server failed to start"; cat /tmp/dev.log; exit 1
+
+      - name: Renderer tests
+        run: npm run test:renderer
+
+      - name: Dashboard tests
+        run: npm run test:dashboards
+
+      - name: Behavior tests
+        run: npm run test:behavior
+
+      - name: Dev server log
+        if: failure()
+        run: cat /tmp/dev.log

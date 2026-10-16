@@ -29,22 +29,26 @@ export const BASE = process.env.OPSDESK_BASE || "http://localhost:3000";
  */
 export function chromiumPath(): string {
   if (process.env.PLAYWRIGHT_CHROMIUM) return process.env.PLAYWRIGHT_CHROMIUM;
-  const suffix =
-    "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
-  const cacheRoot = join(homedir(), "Library/Caches/ms-playwright");
-  try {
-    const dirs = readdirSync(cacheRoot)
-      .filter((d) => d.startsWith("chromium-"))
-      .sort()
-      .reverse();
-    for (const d of dirs) {
-      const p = join(cacheRoot, d, suffix);
-      if (existsSync(p)) return p;
+  const suffix = "chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing";
+  const cacheRoots = [join(homedir(), "Library/Caches/ms-playwright"), join(homedir(), ".cache/ms-playwright")];
+  const suffixes = [suffix, "chrome-mac/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing", "chrome-linux/chrome"];
+  for (const root of cacheRoots) {
+    try {
+      const dirs = readdirSync(root)
+        .filter((d) => d.startsWith("chromium-"))
+        .sort()
+        .reverse();
+      for (const d of dirs) {
+        for (const s of suffixes) {
+          const p = join(root, d, s);
+          if (existsSync(p)) return p;
+        }
+      }
+    } catch {
+      /* cache missing — try next root */
     }
-  } catch {
-    /* cache missing — fall through */
   }
-  return join(cacheRoot, "chromium-1234", suffix);
+  return join(cacheRoots[0], "chromium-1234", suffix);
 }
 
 export function launchBrowser(): Promise<Browser> {
