@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, use } from "react";
 import { migrateCubeToNative, type Manifest } from "@/lib/domain/manifest";
-import { safeJson } from "@/lib/infra/fetch";
+import { safeJson } from "@/lib/util/fetch";
 import { ListForm } from "@/components/forms/ListForm";
 import { GridForm } from "@/components/forms/GridForm";
 import { ArtifactSandbox } from "@/components/forms/ArtifactSandbox";

@@ -6,16 +6,16 @@
 // rebuilds byte-clean HTML. Zero LLM in the edit path.
 import type { ArchetypeId } from "./archetypes";
 import type { z } from "zod";
-import { ConsoleConfigSchema, assembleConsole } from "./studio-v2";
-import { TargetBoardSchema, assembleTargetBoard } from "./target-board";
-import { PipelineSchema, assemblePipeline } from "./pipeline";
-import { LedgerSchema, assembleLedger } from "./ledger";
-import { TemporalSchema, assembleTemporal } from "./temporal";
-import { FleetSchema, assembleFleet } from "./fleet";
-import { QueueSchema, assembleQueue } from "./queue";
-import { ChecklistSchema, assembleChecklist } from "./checklist";
-import { RosterSchema, assembleRoster } from "./roster";
-import { CalendarSchema, assembleCalendar } from "./calendar";
+import { ConsoleConfigSchema, assembleConsole } from "../consoles/studio-v2";
+import { TargetBoardSchema, assembleTargetBoard } from "../consoles/target-board";
+import { PipelineSchema, assemblePipeline } from "../consoles/pipeline";
+import { LedgerSchema, assembleLedger } from "../consoles/ledger";
+import { TemporalSchema, assembleTemporal } from "../consoles/temporal";
+import { FleetSchema, assembleFleet } from "../consoles/fleet";
+import { QueueSchema, assembleQueue } from "../consoles/queue";
+import { ChecklistSchema, assembleChecklist } from "../consoles/checklist";
+import { RosterSchema, assembleRoster } from "../consoles/roster";
+import { CalendarSchema, assembleCalendar } from "../consoles/calendar";
 import { withChassis } from "./artifact-design";
 import type { ChassisArchetype } from "./artifact-design";
 

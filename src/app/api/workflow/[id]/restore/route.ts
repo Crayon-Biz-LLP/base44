@@ -10,13 +10,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
-import { resolveServeRow, insertDraftVersion } from "@/lib/infra/lineage";
-import { gateConsole } from "@/lib/infra/edit-pipeline";
-import type { ArchetypeId } from "@/lib/infra/archetypes";
-import { buildConsole } from "@/lib/infra/assemble-registry";
+import { requireOwnerTenant } from "@/lib/auth/auth";
+import { resolveServeRow, insertDraftVersion } from "@/lib/data/lineage";
+import { gateConsole } from "@/lib/pipeline/edit-pipeline";
+import type { ArchetypeId } from "@/lib/pipeline/archetypes";
+import { buildConsole } from "@/lib/pipeline/assemble-registry";
 import { upgradeForEdit } from "@/lib/domain/config-versions";
-import { recordWorkflowChange, configHashOf } from "@/lib/infra/audit";
+import { recordWorkflowChange, configHashOf } from "@/lib/data/audit";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

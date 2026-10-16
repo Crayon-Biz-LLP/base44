@@ -12,7 +12,7 @@ import { generateWithRepair } from "./repair";
 import { z } from "zod";
 import { esc, jstr } from "./escape";
 import { logoOf } from "./branding";
-import { chromeFonts, chromeCss, icon } from "./chrome";
+import { chromeFonts, chromeCss, chromeJs, icon } from "./chrome";
 
 export const LedgerSchema = z.object({
   productName: z.string().describe("Short invented product name, e.g. 'CashBook Pro'"),
@@ -276,6 +276,7 @@ ${chromeCss(cfg.dark, cfg.accentHex)}
   </div>
 </div>
 <div id="toast" class="toast"></div>
+${chromeJs({ syncLabel: 'Sync Ledger' })}
 <script>
 var ACCOUNTS = ${sJson};
 var STAFF = ${jstr((cfg.staff ?? []).map(s => s.name))};
@@ -295,9 +296,6 @@ function setEntry(n){
 }
 var HZ = ${H ? jstr({ outCap: H.outflowCapPct }) : "null"};
 var UNIT = ${jstr(V.entryNoun)};
-var LS_KEY = 'opsdesk_console_state';
-function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
-function loadLocal(){ try{ var r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
 function signOf(e){ var t = TYPES.find(function(x){ return x.l === e.t; }); return t ? t.s : -1; }
 function balAfter(idx){ var b = OPENING; for (var i = 0; i <= idx; i++) b += signOf(state.entries[i]) * state.entries[i].a; return b; }
 function render(){
@@ -435,7 +433,6 @@ function applyEdit(){
   e.t = document.getElementById('typeSel').value;
   saveLocal(); render(); closeModal(); toast(ENTRY ? 'Saved ✓' : 'Saved'); PERSIST.schedule();
 }
-function toast(m){ var t = document.getElementById('toast'); t.innerText = m; t.classList.add('open'); setTimeout(function(){ t.classList.remove('open'); }, 2000); }
 function renderSpark(bals, threshold){
   var svg = document.getElementById('sparkSvg');
   if (!svg) return;
@@ -460,16 +457,6 @@ function renderSpark(bals, threshold){
 function buildRecords(){
   return state.entries.map(function(e, idx){ return { day: e.d, label: e.l, type: e.t, account: e.ac, amount: (signOf(e) > 0 ? 1 : -1) * e.a, balance_after: balAfter(idx), logged_by: e.by || undefined }; });
 }
-async function sync(){
-  var btn = document.getElementById('syncBtn'); btn.innerText = 'Syncing…';
-  try {
-    if (typeof window.__opsDeskSubmit__ === 'function') {
-      await window.__opsDeskSubmit__({ records: buildRecords() });
-      toast('Synced to OpsDesk');
-    } else { toast('Saved locally'); }
-  } catch (err) { toast('Sync failed'); }
-  btn.innerText = 'Sync Ledger';
-}
 // Engine 2: the ledger is the console's memory. Boot hydrates from the latest
 // confirmed event (applyLoaded merges server records into seeded state); every
 // edit auto-persists a full snapshot through the same submit bridge.
@@ -491,35 +478,6 @@ function applyLoaded(records){
   state.entries.sort(function(x, y){ return x.d - y.d; });
   saveLocal();
 }
-var PERSIST = (function(){
-  var timer = null;
-  var dirty = false;
-  function say(msg){ var e = document.getElementById('syncState'); if (e) e.innerText = msg || ''; }
-  function schedule(){
-    dirty = true;
-    if (timer) clearTimeout(timer);
-    say('Saving…');
-    timer = setTimeout(push, 1200);
-  }
-  async function push(){
-    if (typeof window.__opsDeskSubmit__ !== 'function') { say(''); return; }
-    try { await window.__opsDeskSubmit__({ records: buildRecords() }); say(ENTRY ? 'Sent to boss ✓' : 'Synced'); setTimeout(function(){ say(''); }, 2500); }
-    catch (e) { say('Save failed'); }
-  }
-  async function hydrate(){
-    if (dirty) return; // local edits win; the pending autosave lands shortly
-    if (typeof window.__opsDeskLoad__ !== 'function') return;
-    try {
-      var res = await window.__opsDeskLoad__();
-      if (dirty) return; // edit landed while fetching — local state wins
-      if (res && res.ok){
-        if (res.role === 'staff' && (res.staffName || res.filledBy)) setEntry(res.staffName || res.filledBy); // entry mode before first paint
-        if (res.records && res.records.length){ applyLoaded(res.records); render(); say('Loaded'); setTimeout(function(){ say(''); }, 2500); }
-      }
-    } catch (e) { /* first boot / offline: keep seed */ }
-  }
-  return { schedule: schedule, hydrate: hydrate, push: push };
-})();
 function exportCsv(){
   var rows = [['day', 'label', 'type', 'account', 'amount', 'balance_after']];
   state.entries.forEach(function(e, idx){ rows.push([e.d, e.l, e.t, e.ac, (signOf(e) > 0 ? 1 : -1) * e.a, balAfter(idx)]); });
@@ -527,7 +485,7 @@ function exportCsv(){
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ledger.csv'; a.click();
   toast('Exported CSV');
 }
-(function boot(){ var s = loadLocal(); if (s && s.entries && s.entries.length) state = s; render(); PERSIST.hydrate(); })();
+(function boot(){ var s = loadLocal(); if (s && s.entries && s.entries.length) state = s; render(); PERSIST.hydrate(false); })();
 </script>
 </body>
 </html>`;

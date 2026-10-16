@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, workflows } from "@/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { getAppAccess } from "@/lib/infra/app-auth";
+import { getAppAccess } from "@/lib/auth/app-auth";
 
 // Read path for the app tier: the latest confirmed event for the id's LINEAGE
 // is the current console state (append-only ledger replaying its newest

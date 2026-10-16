@@ -7,7 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Bot, User, Send, CheckCircle2, AlertTriangle, Loader2, Copy, ExternalLink, QrCode, Play, Info } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { DEMO_INDUSTRIES, PromptKind } from "@/data/demo-prompts";
-import { safeJson } from "@/lib/infra/fetch";
+import { safeJson } from "@/lib/util/fetch";
 import type { Manifest } from "@/lib/domain/manifest";
 
 // Builder-local view types: the chat response is a Manifest, but legacy/serialized

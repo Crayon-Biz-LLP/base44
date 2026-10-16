@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/auth/auth";
 
 export async function GET() {
   const guard = await requireOwnerTenant();

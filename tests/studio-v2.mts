@@ -3,7 +3,7 @@
 // even from different industries — must produce consoles with IDENTICAL
 // behavioral surface: same modal mechanics, same view switching, same boot
 // order, same sync contract. Content varies; control flow cannot.
-import { assembleConsole, type ConsoleConfig } from "../src/lib/infra/studio-v2";
+import { assembleConsole, type ConsoleConfig } from "../src/lib/consoles/studio-v2";
 import { RACKS, KITCHEN } from "./fixtures/console-configs";
 
 let passes = 0, failures = 0;

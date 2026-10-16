@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, use } from "react";
-import { safeJson } from "@/lib/infra/fetch";
+import { safeJson } from "@/lib/util/fetch";
 import { ArtifactSandbox } from "@/components/forms/ArtifactSandbox";
 import { TrendsStrip } from "@/components/trends-strip";
 

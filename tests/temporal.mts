@@ -1,5 +1,5 @@
 // Temporal tests: invariance across two scheduling domains + structural checks.
-import { assembleTemporal, type TemporalConfig } from "../src/lib/infra/temporal";
+import { assembleTemporal, type TemporalConfig } from "../src/lib/consoles/temporal";
 
 const CLINIC: TemporalConfig = {
   productName: "ChairFlow",

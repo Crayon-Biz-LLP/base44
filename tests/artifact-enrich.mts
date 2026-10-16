@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { enrichArtifact, deriveAccentHex, designPreamble, scoreArtifact } from "../src/lib/infra/artifact";
+import { enrichArtifact, deriveAccentHex, designPreamble, scoreArtifact } from "../src/lib/pipeline/artifact";
 import type { Manifest } from "../src/lib/domain/manifest";
 
 console.log("Artifact enrichment tests");

@@ -11,8 +11,8 @@
 //
 // Doctrine: no new archetype ships without its translator — trends inherit
 // whatever the translator chooses to say.
-import { translateRecords } from "../infra/translators";
-import type { ArchetypeId } from "../infra/archetypes";
+import { translateRecords } from "../pipeline/translators";
+import type { ArchetypeId } from "../pipeline/archetypes";
 
 export interface DayFact {
   day: string; // YYYY-MM-DD (IST)

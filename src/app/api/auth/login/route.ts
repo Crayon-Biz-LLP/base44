@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { createOwnerSession } from "@/lib/infra/auth";
+import { createOwnerSession } from "@/lib/auth/auth";
 
 export async function POST(req: Request) {
   try {

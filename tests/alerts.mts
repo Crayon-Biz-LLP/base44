@@ -119,7 +119,7 @@ test("recovery message follows a fired drop", () => {
 });
 
 test("renderAlertDigest groups by console and closes clean when empty", async () => {
-  const { renderAlertDigest } = await import("../src/lib/infra/channels");
+  const { renderAlertDigest } = await import("../src/lib/util/channels");
   const withItems = renderAlertDigest("Anand Sweets", [{ consoleTitle: "Cashbook", messages: ["Money in down 45%"] }]);
   assert.ok(withItems.includes("Cashbook") && withItems.includes("45%"));
   const empty = renderAlertDigest("Anand Sweets", []);

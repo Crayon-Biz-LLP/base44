@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Bot, LayoutDashboard, LogIn, MoonStar } from "lucide-react";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { getSessionTenantId } from "@/lib/auth/auth";
 
 export default async function HomePage() {
   const tenantId = await getSessionTenantId();

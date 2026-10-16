@@ -7,7 +7,7 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
 
-const { extractConsoleConfig } = await import("../src/lib/infra/studio-v2");
+const { extractConsoleConfig } = await import("../src/lib/consoles/studio-v2");
 
 const PROMPT = "I run a cold storage facility with 10 chambers, each holding 4 pallet rows. Track which produce is stored where and in what quantity.";
 const RUNS = 3;

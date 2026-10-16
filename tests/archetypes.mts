@@ -1,7 +1,7 @@
 // Classifier accuracy gate: every canonical trigger prompt must land on its
 // expected archetype. This is the registry's contract — new archetypes join by
 // adding keywords + a canonical case here, and the gate enforces them.
-import { pickArchetype, CLASSIFIER_CASES, ARCHETYPES } from "../src/lib/infra/archetypes";
+import { pickArchetype, CLASSIFIER_CASES, ARCHETYPES } from "../src/lib/pipeline/archetypes";
 
 let passes = 0, failures = 0;
 function check(name: string, ok: boolean, extra = "") {

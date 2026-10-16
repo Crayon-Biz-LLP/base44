@@ -4,8 +4,8 @@ import { workflows } from "@/db/schema";
 import { NextResponse } from "next/server";
 import { DashboardSpecSchema, type DashboardSpec } from "@/lib/domain/dashboard-spec";
 import { eq, and } from "drizzle-orm";
-import { generateWithRepair } from "@/lib/infra/repair";
-import { requireOwnerTenant } from "@/lib/infra/auth";
+import { generateWithRepair } from "@/lib/consoles/repair";
+import { requireOwnerTenant } from "@/lib/auth/auth";
 
 type SchemaShape = { layout_type?: string; rows?: { label?: string }[]; fields?: { label?: string }[] };
 type ConfigShape = { title?: string; schema?: SchemaShape };

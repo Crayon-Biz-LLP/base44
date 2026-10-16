@@ -2,7 +2,7 @@
 // geometries, field types — if the template holds across both, content
 // variance is decoupled from behavior. RACKS exercises the V3 intelligence
 // features (tonnage/audit/balance); KITCHEN exercises the featureless path.
-import type { ConsoleConfig } from "../../src/lib/infra/studio-v2";
+import type { ConsoleConfig } from "../../src/lib/consoles/studio-v2";
 
 export const RACKS: ConsoleConfig = {
   productName: "LaserRack Pro",

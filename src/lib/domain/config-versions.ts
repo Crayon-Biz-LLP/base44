@@ -12,8 +12,8 @@
 // backfill declared defaults and rename keys. A step that cannot be computed
 // deterministically does not belong here.
 import { z } from "zod";
-import { ASSEMBLERS, parseConfig } from "../infra/assemble-registry";
-import type { ArchetypeId } from "../infra/archetypes";
+import { ASSEMBLERS, parseConfig } from "../pipeline/assemble-registry";
+import type { ArchetypeId } from "../pipeline/archetypes";
 
 export const CURRENT_CONFIG_VERSION = 1;
 

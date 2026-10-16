@@ -7,8 +7,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
-import { resolveServeRow } from "@/lib/infra/lineage";
+import { requireOwnerTenant } from "@/lib/auth/auth";
+import { resolveServeRow } from "@/lib/data/lineage";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

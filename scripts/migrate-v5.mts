@@ -12,7 +12,7 @@ const { db } = await import("../src/db/index");
 const { workflows } = await import("../src/db/schema");
 const { eq, lt, or, isNull } = await import("drizzle-orm");
 const { lazyUpgradeWorkflowConfig } = await import("../src/lib/domain/upgrader");
-const { generateArtifact } = await import("../src/lib/infra/artifact");
+const { generateArtifact } = await import("../src/lib/pipeline/artifact");
 
 async function migrate() {
   console.log("Starting Manifest V5 Migration...");

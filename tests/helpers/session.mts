@@ -17,7 +17,7 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
 }
 
 const { signOwnerValue, signStaffValue, OWNER_COOKIE_NAME, staffCookieName } = await import(
-  "../../src/lib/infra/app-auth"
+  "../../src/lib/auth/app-auth"
 );
 
 export const BASE = process.env.OPSDESK_BASE || "http://localhost:3000";

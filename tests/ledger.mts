@@ -1,5 +1,5 @@
 // Ledger tests: invariance across two money domains + structural checks.
-import { assembleLedger, type LedgerConfig } from "../src/lib/infra/ledger";
+import { assembleLedger, type LedgerConfig } from "../src/lib/consoles/ledger";
 
 const SHOP: LedgerConfig = {
   productName: "CashBook Pro",

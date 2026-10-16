@@ -6,9 +6,9 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
-const { pickArchetype } = await import("../src/lib/infra/archetypes");
-const { generateConsoleForPrompt } = await import("../src/lib/infra/console-router");
-import type { ChassisArchetype } from "../src/lib/infra/artifact-design";
+const { pickArchetype } = await import("../src/lib/pipeline/archetypes");
+const { generateConsoleForPrompt } = await import("../src/lib/pipeline/console-router");
+import type { ChassisArchetype } from "../src/lib/pipeline/artifact-design";
 
 const CASES = [
   { name: "Sunrise Tuition Centre", prompt: "I run a tuition centre with 4 teachers. Each teacher takes 6 half-hour slots daily from 4pm to 8pm. Teachers Priya, Anand, Divya and Suresh." },

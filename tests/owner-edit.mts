@@ -6,9 +6,9 @@
 // Run: npx tsx --test --test-force-exit tests/owner-edit.mts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyCascades, reassemble } from "../src/lib/infra/assemble-registry";
-import { applyChatEdit, ChatEditSchema } from "../src/lib/infra/chat-edit";
-import { validateArtifact } from "../src/lib/infra/validate-artifact";
+import { applyCascades, reassemble } from "../src/lib/pipeline/assemble-registry";
+import { applyChatEdit, ChatEditSchema } from "../src/lib/pipeline/chat-edit";
+import { validateArtifact } from "../src/lib/pipeline/validate-artifact";
 import { roster, temporal, queue, pipeline } from "../scripts/demo-fixtures";
 
 test("applyCascades: temporal resource rename cascades into slots", () => {
@@ -114,7 +114,7 @@ test("chat-edit: schema rejects a model emitting code-ish garbage", () => {
 });
 
 // ---- Shared edit pipeline (the exact path the editor/chat/restore routes use)
-import { runConsoleEdit, syntaxGate } from "../src/lib/infra/edit-pipeline";
+import { runConsoleEdit, syntaxGate } from "../src/lib/pipeline/edit-pipeline";
 
 test("edit-pipeline: patch → cascades → gates → gate-passing HTML", async () => {
   const base = structuredClone(roster) as unknown as Record<string, unknown>;

@@ -22,9 +22,9 @@ import { and, eq, gte, inArray } from "drizzle-orm";
 import { computeConsoleTrend } from "@/lib/domain/trends";
 import { computeAlerts, type AlertDecision } from "@/lib/domain/alerts";
 import { istDay } from "@/lib/domain/trends";
-import { loadAlertStates, saveAlertStates, logAlerts } from "@/lib/infra/alert-store";
-import { sendEmail, sendWhatsApp, renderAlertDigest } from "@/lib/infra/channels";
-import type { ArchetypeId } from "@/lib/infra/archetypes";
+import { loadAlertStates, saveAlertStates, logAlerts } from "@/lib/data/alert-store";
+import { sendEmail, sendWhatsApp, renderAlertDigest } from "@/lib/util/channels";
+import type { ArchetypeId } from "@/lib/pipeline/archetypes";
 
 export async function POST(req: Request) {
   try {

@@ -7,17 +7,17 @@
 // suite). Usage: npx tsx scripts/demo-before-after.mts
 import { writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { assembleConsole } from "../src/lib/infra/studio-v2";
-import { assembleTargetBoard } from "../src/lib/infra/target-board";
-import { assemblePipeline } from "../src/lib/infra/pipeline";
-import { assembleLedger } from "../src/lib/infra/ledger";
-import { assembleTemporal } from "../src/lib/infra/temporal";
-import { assembleFleet } from "../src/lib/infra/fleet";
-import { assembleQueue } from "../src/lib/infra/queue";
-import { assembleChecklist } from "../src/lib/infra/checklist";
-import { assembleRoster } from "../src/lib/infra/roster";
-import { assembleCalendar } from "../src/lib/infra/calendar";
-import { withChassis, type ChassisArchetype } from "../src/lib/infra/artifact-design";
+import { assembleConsole } from "../src/lib/consoles/studio-v2";
+import { assembleTargetBoard } from "../src/lib/consoles/target-board";
+import { assemblePipeline } from "../src/lib/consoles/pipeline";
+import { assembleLedger } from "../src/lib/consoles/ledger";
+import { assembleTemporal } from "../src/lib/consoles/temporal";
+import { assembleFleet } from "../src/lib/consoles/fleet";
+import { assembleQueue } from "../src/lib/consoles/queue";
+import { assembleChecklist } from "../src/lib/consoles/checklist";
+import { assembleRoster } from "../src/lib/consoles/roster";
+import { assembleCalendar } from "../src/lib/consoles/calendar";
+import { withChassis, type ChassisArchetype } from "../src/lib/pipeline/artifact-design";
 import { spatial, targetBoard, pipeline, ledger, temporal, fleet, queue, checklist, roster, calendar } from "./demo-fixtures";
 
 type Pair = { id: ChassisArchetype; label: string; before: string; after: string };

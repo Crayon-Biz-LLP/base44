@@ -18,7 +18,7 @@ const BASE = "http://localhost:3000";
 const prompt = process.argv[2] || "I have 4 employees: Bhuvana, Srimathi, Shamla, and Niharshana. Every day I need them to report their actual numbers for 'New' (target 3), '10DDay' (target 20). Please build my app..";
 
 // 1. Publish a fresh console through the real router (now stamps archetype+config).
-const { generateConsoleForPrompt } = await import("../src/lib/infra/console-router");
+const { generateConsoleForPrompt } = await import("../src/lib/pipeline/console-router");
 const { db } = await import("../src/db/index");
 const { tenants, workflows } = await import("../src/db/schema");
 const gen = await generateConsoleForPrompt(prompt);
@@ -67,7 +67,7 @@ console.log(`records fixture: ${records.length} rows`);
 
 // 3. Push through the REAL submit-form route (what __opsDeskSubmit__ does).
 // The route is tenant-private (A3): carry the signed owner cookie the gate sets.
-const { signOwnerValue } = await import("../src/lib/infra/app-auth");
+const { signOwnerValue } = await import("../src/lib/auth/app-auth");
 const sub = await fetch(`${BASE}/api/submit-form`, {
   method: "POST",
   headers: {

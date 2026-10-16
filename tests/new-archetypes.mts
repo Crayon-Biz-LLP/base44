@@ -8,16 +8,16 @@
 // Run: npx tsx --test --test-force-exit tests/new-archetypes.mts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateArtifact } from "../src/lib/infra/validate-artifact";
-import { withChassis } from "../src/lib/infra/artifact-design";
-import { assembleQueue } from "../src/lib/infra/queue";
-import { assembleChecklist } from "../src/lib/infra/checklist";
-import { assembleRoster } from "../src/lib/infra/roster";
-import { assembleCalendar } from "../src/lib/infra/calendar";
-import { assembleTargetBoard } from "../src/lib/infra/target-board";
-import { assembleConsole } from "../src/lib/infra/studio-v2";
-import { assemblePipeline } from "../src/lib/infra/pipeline";
-import { pickArchetype, ARCHETYPES } from "../src/lib/infra/archetypes";
+import { validateArtifact } from "../src/lib/pipeline/validate-artifact";
+import { withChassis } from "../src/lib/pipeline/artifact-design";
+import { assembleQueue } from "../src/lib/consoles/queue";
+import { assembleChecklist } from "../src/lib/consoles/checklist";
+import { assembleRoster } from "../src/lib/consoles/roster";
+import { assembleCalendar } from "../src/lib/consoles/calendar";
+import { assembleTargetBoard } from "../src/lib/consoles/target-board";
+import { assembleConsole } from "../src/lib/consoles/studio-v2";
+import { assemblePipeline } from "../src/lib/consoles/pipeline";
+import { pickArchetype, ARCHETYPES } from "../src/lib/pipeline/archetypes";
 import { queue, checklist, roster, calendar, spatial, targetBoard, pipeline } from "../scripts/demo-fixtures";
 
 const CONTRACT_PIECES = ["#staffHome", "renderStaffHome", "body.entry", "__opsDeskSubmit__", "__opsDeskLoad__", "id=\"toast\"", "PERSIST.schedule"];

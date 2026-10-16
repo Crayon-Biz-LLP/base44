@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, workflows } from "@/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/auth/auth";
 
 export const dynamic = "force-dynamic";
 

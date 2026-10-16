@@ -1,5 +1,5 @@
 // Debug: find the first divergence between the two behavioral surfaces.
-import { assembleConsole } from "../src/lib/infra/studio-v2";
+import { assembleConsole } from "../src/lib/consoles/studio-v2";
 import { RACKS, KITCHEN } from "../tests/fixtures/console-configs";
 
 function surface(html: string): string {

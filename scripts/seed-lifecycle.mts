@@ -2,7 +2,7 @@
 // ensures the demo tenant exists and publishes a fresh roster console from
 // the shared fixture, then prints its workflow id for LC_WF.
 // Usage: npx tsx scripts/seed-lifecycle.mts
-import { reassemble } from "../src/lib/infra/assemble-registry";
+import { reassemble } from "../src/lib/pipeline/assemble-registry";
 import { roster } from "./demo-fixtures";
 
 async function main() {

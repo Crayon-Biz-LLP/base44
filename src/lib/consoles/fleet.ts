@@ -14,7 +14,7 @@ import { generateWithRepair } from "./repair";
 import { z } from "zod";
 import { esc, jstr } from "./escape";
 import { logoOf } from "./branding";
-import { chromeFonts, chromeCss, icon } from "./chrome";
+import { chromeFonts, chromeCss, chromeJs, icon } from "./chrome";
 
 export const FleetSchema = z.object({
   productName: z.string().describe("Short invented product name, e.g. 'FleetPulse'"),
@@ -280,6 +280,7 @@ ${chromeCss(cfg.dark, cfg.accentHex)}
   </div>
 </div>
 <div id="toast" class="toast"></div>
+${chromeJs({ syncLabel: 'Sync Fleet' })}
 <script>
 var STATUSES = ${stJson};
 var SERVICE_EVERY = ${cfg.serviceEvery};
@@ -288,9 +289,6 @@ var state = { assets: ${aJson} }, editing = null, stFilter = null;
 var HZ = ${H ? jstr({ runTarget: H.runTargetPct }) : "null"};
 var UNIT = ${jstr(V.assetNoun)};
 var touched = {}; // asset fields edited locally this session — remote hydrate must not clobber them
-var LS_KEY = 'opsdesk_console_state';
-function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
-function loadLocal(){ try{ var r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
 function svcState(a){
   // HONEST SERVICE CLOCK (v2): since = meter − lastService, not meter % interval.
   // The old modulo math made a machine serviced yesterday look identical to one
@@ -465,7 +463,6 @@ function applyEdit(){
   touched['n|' + a.n] = 1; touched['s|' + a.n] = 1; touched['o|' + a.n] = 1; touched['r|' + a.n] = 1;
   saveLocal(); render(); closeModal(); toast(ENTRY ? 'Saved ✓' : 'Saved'); PERSIST.schedule();
 }
-function toast(m){ var t = document.getElementById('toast'); t.innerText = m; t.classList.add('open'); setTimeout(function(){ t.classList.remove('open'); }, 2000); }
 var ST_HUE = {};
 STATUSES.forEach(function(s, i){ ST_HUE[s] = Math.round((i * 137.5) % 360); });
 function renderDist(counts){
@@ -487,16 +484,6 @@ function buildRecords(){
   // Full snapshot, always — entry mode scopes the VIEW, never the ledger.
   return state.assets.map(function(a){ var svc = svcState(a); return { name: a.n, status: a.s, owner: a.o, reading: a.r || null, service_state: svc.cls, last_service: a.ls || 0 }; });
 }
-async function sync(){
-  var btn = document.getElementById('syncBtn'); btn.innerText = 'Syncing…';
-  try {
-    if (typeof window.__opsDeskSubmit__ === 'function') {
-      await window.__opsDeskSubmit__({ records: buildRecords() });
-      toast('Synced to OpsDesk');
-    } else { toast('Saved locally'); }
-  } catch (err) { toast('Sync failed'); }
-  btn.innerText = 'Sync Fleet';
-}
 // Engine 2: the ledger is the console's memory. Boot hydrates from the latest
 // confirmed event (applyLoaded merges server records into seeded state); every
 // edit auto-persists a full snapshot through the same submit bridge.
@@ -513,38 +500,6 @@ function applyLoaded(records){
   });
   saveLocal();
 }
-var PERSIST = (function(){
-  var timer = null;
-  var dirty = false;
-  function say(msg){ var e = document.getElementById('syncState'); if (e) e.innerText = msg || ''; }
-  function schedule(){
-    dirty = true;
-    if (timer) clearTimeout(timer);
-    say('Saving…');
-    timer = setTimeout(push, 1200);
-  }
-  async function push(){
-    if (typeof window.__opsDeskSubmit__ !== 'function') { say(''); return; }
-    try { await window.__opsDeskSubmit__({ records: buildRecords() }); say(ENTRY ? 'Sent to boss ✓' : 'Synced'); setTimeout(function(){ say(''); }, 2500); }
-    catch (e) { say('Save failed'); }
-  }
-  async function hydrate(boot){
-    if (dirty) return; // local edits win; the pending autosave lands shortly
-    if (typeof window.__opsDeskLoad__ !== 'function') return;
-    try {
-      var res = await window.__opsDeskLoad__();
-      if (dirty) return; // edit landed while fetching — local state wins
-      if (res && res.ok){
-        if (res.role === 'staff' && (res.staffName || res.filledBy)) setEntry(res.staffName || res.filledBy); // entry mode before first paint
-        if (res.records && res.records.length){
-          applyLoaded(res.records);
-          if (!boot){ render(); say('Loaded'); setTimeout(function(){ say(''); }, 2500); }
-        }
-      }
-    } catch (e) { /* first boot / offline: keep seed */ }
-  }
-  return { schedule: schedule, hydrate: hydrate, push: push };
-})();
 function exportCsv(){
   var rows = [['name', 'status', 'owner', 'reading', 'service_state']];
   state.assets.forEach(function(a){ var svc = svcState(a); rows.push([a.n, a.s, a.o || '', a.r || '', svc.cls]); });

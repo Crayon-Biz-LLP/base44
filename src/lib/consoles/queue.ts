@@ -15,7 +15,7 @@ import { generateWithRepair } from "./repair";
 import { z } from "zod";
 import { esc, jstr } from "./escape";
 import { logoOf } from "./branding";
-import { chromeFonts, chromeCss, icon } from "./chrome";
+import { chromeFonts, chromeCss, chromeJs, icon } from "./chrome";
 
 export const QueueSchema = z.object({
   productName: z.string().describe("Short invented product name, e.g. 'TokenSetu'"),
@@ -241,6 +241,7 @@ ${chromeCss(cfg.dark, cfg.accentHex)}
   </div>
 </div>
 <div id="toast" class="toast"></div>
+${chromeJs({ syncLabel: 'Sync Queue' })}
 <script>
 var COUNTERS = ${cJson};
 var AVG_MIN = ${cfg.avgMinutes};
@@ -248,9 +249,6 @@ var state = { tokens: ${tJson} }, editing = null;
 var HZ = ${H ? jstr({ rush: H.rushPerCounter }) : "null"};
 var UNIT = ${jstr(V.personNoun)};
 var touched = {};
-var LS_KEY = 'opsdesk_console_state';
-function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
-function loadLocal(){ try{ var r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
 function waitingFor(c){ return state.tokens.filter(function(t){ return t.c === c && t.s === 'waiting'; }); }
 function servingOf(c){ return state.tokens.find(function(t){ return t.c === c && t.s === 'serving'; }); }
 function nextUp(c){ return waitingFor(c)[0] || null; }
@@ -355,7 +353,6 @@ function applyEdit(){
   }
   saveLocal(); render(); closeModal(); toast(ENTRY ? 'Sent to boss ✓' : 'Saved'); PERSIST.schedule();
 }
-function toast(m){ var t = document.getElementById('toast'); t.innerText = m; t.classList.add('open'); setTimeout(function(){ t.classList.remove('open'); }, 2000); }
 document.getElementById('counterGrid').addEventListener('click', function(ev){
   var s = ev.target.closest('[data-serve]'); if (s){ serveNext(s.getAttribute('data-serve')); return; }
   var w = ev.target.closest('[data-walk]'); if (w){ addToken(w.getAttribute('data-walk')); }
@@ -388,16 +385,6 @@ document.getElementById('shNew').addEventListener('click', function(){ if (ENTRY
 function buildRecords(){
   return state.tokens.map(function(t){ return { token: t.n, purpose: t.p, counter: t.c, status: t.s }; });
 }
-async function sync(){
-  var btn = document.getElementById('syncBtn'); btn.innerText = 'Syncing…';
-  try {
-    if (typeof window.__opsDeskSubmit__ === 'function') {
-      await window.__opsDeskSubmit__({ records: buildRecords() });
-      toast('Synced to OpsDesk');
-    } else { toast('Saved locally'); }
-  } catch (e) { toast('Sync failed'); }
-  btn.innerText = 'Sync Queue';
-}
 // Engine 2: the ledger is the console's memory. Boot hydrates from the latest
 // confirmed event (applyLoaded merges server records into seeded state); every
 // edit auto-persists a full snapshot through the same submit bridge.
@@ -412,38 +399,6 @@ function applyLoaded(records){
   });
   saveLocal();
 }
-var PERSIST = (function(){
-  var timer = null;
-  var dirty = false;
-  function say(msg){ var e = document.getElementById('syncState'); if (e) e.innerText = msg || ''; }
-  function schedule(){
-    dirty = true;
-    if (timer) clearTimeout(timer);
-    say('Saving…');
-    timer = setTimeout(push, 1200);
-  }
-  async function push(){
-    if (typeof window.__opsDeskSubmit__ !== 'function') { say(''); return; }
-    try { await window.__opsDeskSubmit__({ records: buildRecords() }); say(ENTRY ? 'Sent to boss ✓' : 'Synced'); setTimeout(function(){ say(''); }, 2500); }
-    catch (e) { say('Save failed'); }
-  }
-  async function hydrate(boot){
-    if (dirty) return; // local edits win; the pending autosave lands shortly
-    if (typeof window.__opsDeskLoad__ !== 'function') return;
-    try {
-      var res = await window.__opsDeskLoad__();
-      if (dirty) return; // edit landed while fetching — local state wins
-      if (res && res.ok){
-        if (res.role === 'staff' && (res.staffName || res.filledBy)) setEntry(res.staffName || res.filledBy); // entry mode before first paint
-        if (res.records && res.records.length){
-          applyLoaded(res.records);
-          if (!boot){ render(); say('Loaded'); setTimeout(function(){ say(''); }, 2500); }
-        }
-      }
-    } catch (e) { /* first boot / offline: keep seed */ }
-  }
-  return { schedule: schedule, hydrate: hydrate, push: push };
-})();
 function exportCsv(){
   var rows = [['token', 'purpose', 'counter', 'status']];
   state.tokens.forEach(function(t){ rows.push([t.n, t.p, t.c, t.s]); });

@@ -3,16 +3,16 @@
 // Every assembled console passes through withChassis (Section B design layer)
 // before leaving the router, so chassis coverage is structural, not opt-in.
 import { pickArchetype, type ArchetypeId } from "./archetypes";
-import { extractConsoleConfig, assembleConsole } from "./studio-v2";
-import { extractTargetBoardConfig, assembleTargetBoard } from "./target-board";
-import { extractPipelineConfig, assemblePipeline } from "./pipeline";
-import { extractLedgerConfig, assembleLedger } from "./ledger";
-import { extractTemporalConfig, assembleTemporal } from "./temporal";
-import { extractFleetConfig, assembleFleet } from "./fleet";
-import { extractQueueConfig, assembleQueue } from "./queue";
-import { extractChecklistConfig, assembleChecklist } from "./checklist";
-import { extractRosterConfig, assembleRoster } from "./roster";
-import { extractCalendarConfig, assembleCalendar } from "./calendar";
+import { extractConsoleConfig, assembleConsole } from "../consoles/studio-v2";
+import { extractTargetBoardConfig, assembleTargetBoard } from "../consoles/target-board";
+import { extractPipelineConfig, assemblePipeline } from "../consoles/pipeline";
+import { extractLedgerConfig, assembleLedger } from "../consoles/ledger";
+import { extractTemporalConfig, assembleTemporal } from "../consoles/temporal";
+import { extractFleetConfig, assembleFleet } from "../consoles/fleet";
+import { extractQueueConfig, assembleQueue } from "../consoles/queue";
+import { extractChecklistConfig, assembleChecklist } from "../consoles/checklist";
+import { extractRosterConfig, assembleRoster } from "../consoles/roster";
+import { extractCalendarConfig, assembleCalendar } from "../consoles/calendar";
 import { withChassis } from "./artifact-design";
 
 export interface GeneratedConsole {

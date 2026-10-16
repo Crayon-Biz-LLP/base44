@@ -13,7 +13,7 @@ import { generateWithRepair } from "./repair";
 import { z } from "zod";
 import { esc, jstr } from "./escape";
 import { logoOf } from "./branding";
-import { chromeFonts, chromeCss, icon } from "./chrome";
+import { chromeFonts, chromeCss, chromeJs, icon } from "./chrome";
 
 export const TargetBoardSchema = z.object({
   productName: z.string().describe("Short invented product name, e.g. 'MetricFlow Pro'"),
@@ -284,6 +284,7 @@ ${chromeCss(cfg.dark, cfg.accentHex)}
   </div>
 </div>
 <div id="toast" class="toast"></div>
+${chromeJs({ syncLabel: 'Sync Report' })}
 <script>
 var METRICS = ${mJson};
 var PEOPLE = ${jstr(cfg.people.map(p => p.name))};
@@ -315,7 +316,6 @@ function openStock(i){
   var f = document.getElementById('editF0'); f.value = String(s.q); f.setAttribute('aria-label', 'Quantity of ' + s.n);
   document.getElementById('modal').classList.add('open'); f.focus();
 }
-var LS_KEY = 'opsdesk_console_state';
 var IC_TOP = '${icon("zap", 11)}';
 var HUE = {};
 METRICS.forEach(function(m, i){ HUE[m.k] = Math.round((i * 137.5) % 360); });
@@ -336,8 +336,6 @@ function renderPodium(achMap, onMap){
       '<span class="pod-pct mono ' + (t.a >= 100 ? 'tint-ok' : (t.a >= 70 ? 'tint-warn' : 'tint-danger')) + '">' + t.a + '%</span></div>';
   }).join('');
 }
-function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
-function loadLocal(){ try{ var r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
 function cellKey(n, k){ return n + '|' + k; }
 function markTouched(n, k){ touched[cellKey(n, k)] = 1; saveLocal(); }
 function seedDemo(){
@@ -452,7 +450,6 @@ function applyEdit(){
   markTouched(editing.n, editing.k);
   render(); closeModal(); toast(ENTRY ? 'Saved ✓' : 'Saved'); PERSIST.schedule();
 }
-function toast(m){ var t = document.getElementById('toast'); t.innerText = m; t.classList.add('open'); setTimeout(function(){ t.classList.remove('open'); }, 2000); }
 document.getElementById('tbody').addEventListener('click', function(ev){
   var c = ev.target.closest('.cell'); if (!c) return;
   openModal(c.getAttribute('data-p'), c.getAttribute('data-k'));
@@ -469,16 +466,6 @@ function buildRecords(){
     return r;
   });
 }
-async function sync(){
-  var btn = document.getElementById('syncBtn'); btn.innerText = 'Syncing…';
-  try {
-    if (typeof window.__opsDeskSubmit__ === 'function') {
-      await window.__opsDeskSubmit__({ records: buildRecords() });
-      toast('Synced to OpsDesk');
-    } else { toast('Saved locally'); }
-  } catch (e) { toast('Sync failed'); }
-  btn.innerText = 'Sync Report';
-}
 // Engine 2: the ledger is the console's memory. Boot hydrates from the latest
 // confirmed event (applyLoaded merges server records into seeded state); every
 // edit auto-persists a full snapshot through the same submit bridge.
@@ -492,38 +479,6 @@ function applyLoaded(records){
   });
   saveLocal();
 }
-var PERSIST = (function(){
-  var timer = null;
-  var dirty = false;
-  function say(msg){ var e = document.getElementById('syncState'); if (e) e.innerText = msg || ''; }
-  function schedule(){
-    dirty = true;
-    if (timer) clearTimeout(timer);
-    say('Saving…');
-    timer = setTimeout(push, 1200);
-  }
-  async function push(){
-    if (typeof window.__opsDeskSubmit__ !== 'function') { say(''); return; }
-    try { await window.__opsDeskSubmit__({ records: buildRecords() }); say(ENTRY ? 'Sent to boss ✓' : 'Synced'); setTimeout(function(){ say(''); }, 2500); }
-    catch (e) { say('Save failed'); }
-  }
-  async function hydrate(boot){
-    if (dirty) return; // local edits win; the pending autosave lands shortly
-    if (typeof window.__opsDeskLoad__ !== 'function') return;
-    try {
-      var res = await window.__opsDeskLoad__();
-      if (dirty) return; // edit landed while fetching — local state wins
-      if (res && res.ok){
-        if (res.role === 'staff' && (res.staffName || res.filledBy)) setEntry(res.staffName || res.filledBy); // entry mode before first paint
-        if (res.records && res.records.length){
-          applyLoaded(res.records);
-          if (!boot){ render(); say('Loaded'); setTimeout(function(){ say(''); }, 2500); }
-        }
-      }
-    } catch (e) { /* first boot / offline: keep seed */ }
-  }
-  return { schedule: schedule, hydrate: hydrate, push: push };
-})();
 function exportCsv(){
   var rows = [['employee'].concat(METRICS.map(function(m){ return m.k; }))];
   PEOPLE.forEach(function(n){ rows.push([n].concat(METRICS.map(function(m){ return state[cellKey(n, m.k)] || 0; }))); });

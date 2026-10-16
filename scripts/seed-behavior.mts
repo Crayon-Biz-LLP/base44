@@ -8,9 +8,9 @@
 // tests/behavior-all.mts) and prints an `export` block for manual runs.
 //
 // Usage: npx tsx scripts/seed-behavior.mts
-import { reassemble } from "../src/lib/infra/assemble-registry";
+import { reassemble } from "../src/lib/pipeline/assemble-registry";
 import { spatial, targetBoard, pipeline, ledger, temporal, fleet } from "./demo-fixtures";
-import type { ArchetypeId } from "../src/lib/infra/archetypes";
+import type { ArchetypeId } from "../src/lib/pipeline/archetypes";
 import { readFileSync, writeFileSync } from "node:fs";
 
 // Load .env.local before the DB client reads process.env.DATABASE_URL.

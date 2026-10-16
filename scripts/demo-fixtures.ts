@@ -1,16 +1,16 @@
 // Shared fixtures — one realistic config per archetype, the exact shape the
 // extractors emit. Single source of truth for scripts/demo-before-after.mts
 // and tests/validate-artifact.mts so every gate assembles identical bytes.
-import type { ConsoleConfig } from "../src/lib/infra/studio-v2";
-import type { TargetBoardConfig } from "../src/lib/infra/target-board";
-import type { PipelineConfig } from "../src/lib/infra/pipeline";
-import type { LedgerConfig } from "../src/lib/infra/ledger";
-import type { TemporalConfig } from "../src/lib/infra/temporal";
-import type { FleetConfig } from "../src/lib/infra/fleet";
-import type { QueueConfig } from "../src/lib/infra/queue";
-import type { ChecklistConfig } from "../src/lib/infra/checklist";
-import type { RosterConfig } from "../src/lib/infra/roster";
-import type { CalendarConfig } from "../src/lib/infra/calendar";
+import type { ConsoleConfig } from "../src/lib/consoles/studio-v2";
+import type { TargetBoardConfig } from "../src/lib/consoles/target-board";
+import type { PipelineConfig } from "../src/lib/consoles/pipeline";
+import type { LedgerConfig } from "../src/lib/consoles/ledger";
+import type { TemporalConfig } from "../src/lib/consoles/temporal";
+import type { FleetConfig } from "../src/lib/consoles/fleet";
+import type { QueueConfig } from "../src/lib/consoles/queue";
+import type { ChecklistConfig } from "../src/lib/consoles/checklist";
+import type { RosterConfig } from "../src/lib/consoles/roster";
+import type { CalendarConfig } from "../src/lib/consoles/calendar";
 
 export const spatial: ConsoleConfig = {
   productName: "LaserRack Pro", logoText: "LR", tagline: "Sheet metal yard, 30 racks × 8 rows",

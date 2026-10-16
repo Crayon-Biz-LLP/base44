@@ -1,7 +1,7 @@
 // Tiny CLI: run the zero-LLM artifact validator on built HTML files.
 // Usage: npx tsx scripts/check-html.mts <file.html> [more.html...]
 import { readFileSync } from "node:fs";
-import { validateArtifact } from "../src/lib/infra/validate-artifact";
+import { validateArtifact } from "../src/lib/pipeline/validate-artifact";
 
 let bad = 0;
 for (const f of process.argv.slice(2)) {

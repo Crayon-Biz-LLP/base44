@@ -12,10 +12,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, workflows } from "@/db/schema";
 import { and, eq, gte, inArray } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/auth/auth";
 import { buildOverviewRow, sortOverviewRows } from "@/lib/domain/overview";
 import { buildActivityFeed } from "@/lib/domain/activity-feed";
-import type { ArchetypeId } from "@/lib/infra/archetypes";
+import type { ArchetypeId } from "@/lib/pipeline/archetypes";
 
 export async function GET() {
   try {

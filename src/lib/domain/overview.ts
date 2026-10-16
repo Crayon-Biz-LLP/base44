@@ -5,7 +5,7 @@
 // overview shows state, the cron shows news).
 import { computeConsoleTrend, istDay } from "./trends";
 import { DROP_PCT } from "./alerts";
-import type { ArchetypeId } from "../infra/archetypes";
+import type { ArchetypeId } from "../pipeline/archetypes";
 
 export interface OverviewRow {
   id: string;

@@ -3,12 +3,12 @@
 // that tsc cannot see. Lifecycle ops made this gate mandatory.
 import { writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { assemblePipeline } from "../src/lib/infra/pipeline";
-import { assembleLedger } from "../src/lib/infra/ledger";
-import { assembleTemporal } from "../src/lib/infra/temporal";
-import { assembleFleet } from "../src/lib/infra/fleet";
-import { assembleTargetBoard } from "../src/lib/infra/target-board";
-import { assembleConsole } from "../src/lib/infra/studio-v2";
+import { assemblePipeline } from "../src/lib/consoles/pipeline";
+import { assembleLedger } from "../src/lib/consoles/ledger";
+import { assembleTemporal } from "../src/lib/consoles/temporal";
+import { assembleFleet } from "../src/lib/consoles/fleet";
+import { assembleTargetBoard } from "../src/lib/consoles/target-board";
+import { assembleConsole } from "../src/lib/consoles/studio-v2";
 
 let failures = 0, passes = 0;
 function check(name: string, ok: boolean, extra = "") {

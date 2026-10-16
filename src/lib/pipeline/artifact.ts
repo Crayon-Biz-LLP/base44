@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { getModel, aiKeys, isQuotaError } from "./ai";
+import { getModel, aiKeys, isQuotaError } from "../consoles/ai";
 import type { Manifest } from "@/lib/domain/manifest";
 
 // ---- Deterministic design-system preamble --------------------------------

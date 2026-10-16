@@ -113,8 +113,12 @@ git config core.hooksPath .githooks
 ```
 src/app/         Next.js routes (pages + /api)
 src/components/  shared UI
-src/lib/domain/  manifest, guardrails, business rules
-src/lib/infra/   archetype consoles + runtime (artifact assembly, auth, AI)
+src/lib/domain/   manifest, guardrails, business rules
+src/lib/consoles/ the 10 archetype consoles + their runtime (escape, chrome, branding, repair, ai)
+src/lib/pipeline/ extraction → assembly (archetypes, artifact, assemble-registry, edit-pipeline)
+src/lib/auth/     owner/staff sessions + guards
+src/lib/data/     db-backed stores (audit, lineage, alert-store)
+src/lib/util/     generic helpers (fetch, channels)
 src/db/          Drizzle schema + client
 drizzle/         generated SQL migrations
 tests/           unit + browser behavior suites (tests/helpers/ = shared harness)

@@ -8,9 +8,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
-import { activateLineageHead } from "@/lib/infra/lineage";
-import { recordWorkflowChange, configHashOf } from "@/lib/infra/audit";
+import { requireOwnerTenant } from "@/lib/auth/auth";
+import { activateLineageHead } from "@/lib/data/lineage";
+import { recordWorkflowChange, configHashOf } from "@/lib/data/audit";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

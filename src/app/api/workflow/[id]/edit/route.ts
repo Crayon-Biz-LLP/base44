@@ -20,13 +20,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
-import type { ArchetypeId } from "@/lib/infra/archetypes";
-import { resolveServeRow } from "@/lib/infra/lineage";
-import { insertDraftVersion } from "@/lib/infra/lineage";
-import { runConsoleEdit } from "@/lib/infra/edit-pipeline";
+import { requireOwnerTenant } from "@/lib/auth/auth";
+import type { ArchetypeId } from "@/lib/pipeline/archetypes";
+import { resolveServeRow } from "@/lib/data/lineage";
+import { insertDraftVersion } from "@/lib/data/lineage";
+import { runConsoleEdit } from "@/lib/pipeline/edit-pipeline";
 import { upgradeForEdit } from "@/lib/domain/config-versions";
-import { recordWorkflowChange, configHashOf } from "@/lib/infra/audit";
+import { recordWorkflowChange, configHashOf } from "@/lib/data/audit";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

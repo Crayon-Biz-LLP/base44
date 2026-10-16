@@ -6,8 +6,8 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
-const { pickArchetype } = await import("../src/lib/infra/archetypes");
-const { generateConsoleForPrompt } = await import("../src/lib/infra/console-router");
+const { pickArchetype } = await import("../src/lib/pipeline/archetypes");
+const { generateConsoleForPrompt } = await import("../src/lib/pipeline/console-router");
 
 const CASES = [
   {

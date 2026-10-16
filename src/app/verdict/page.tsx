@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSessionTenantId } from "@/lib/infra/auth";
+import { getSessionTenantId } from "@/lib/auth/auth";
 import { computeTenantDigest, istDayWindow } from "@/lib/domain/digest";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

@@ -5,13 +5,13 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { ensureCanonicalKeys, ManifestSchema, deriveKey, type Manifest } from "@/lib/domain/manifest";
 import { applyGuardrails, validateIntegrity, validateAgainstPrompt } from "@/lib/domain/guardrails";
-import { generateWithRepair } from "@/lib/infra/repair";
-import { requireOwnerTenant } from "@/lib/infra/auth";
+import { generateWithRepair } from "@/lib/consoles/repair";
+import { requireOwnerTenant } from "@/lib/auth/auth";
 import { resolveDateRule, type DateRule } from "@/lib/domain/cube/dates";
-import { isQuotaError } from "@/lib/infra/ai";
-import { generateArtifact } from "@/lib/infra/artifact";
-import type { ArchetypeId } from "@/lib/infra/archetypes";
-import { runConsoleEdit } from "@/lib/infra/edit-pipeline";
+import { isQuotaError } from "@/lib/consoles/ai";
+import { generateArtifact } from "@/lib/pipeline/artifact";
+import type { ArchetypeId } from "@/lib/pipeline/archetypes";
+import { runConsoleEdit } from "@/lib/pipeline/edit-pipeline";
 
 // Pre-canonicalization shape of the LLM extraction. It is deliberately loose:
 // it becomes a Manifest only after ensureCanonicalKeys + guardrails run, so the
@@ -27,7 +27,7 @@ type ChatSchema = {
   [k: string]: unknown;
 };
 import { upgradeForEdit } from "@/lib/domain/config-versions";
-import { recordWorkflowChange, configHashOf } from "@/lib/infra/audit";
+import { recordWorkflowChange, configHashOf } from "@/lib/data/audit";
 
 export async function POST(req: Request) {
   try {

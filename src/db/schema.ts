@@ -69,7 +69,7 @@ export const workflows = pgTable("workflows", {
 });
 
 // 3b. Workflow change audit — every lifecycle mutation on a console lineage
-// (edit, chat revision, restore, activate, rebuild). Written by lib/infra/audit
+// (edit, chat revision, restore, activate, rebuild). Written by lib/data/audit
 // via a never-throwing helper; doubles as the future learning signal.
 export const workflowChanges = pgTable("workflow_changes", {
   id: uuid("id").primaryKey().defaultRandom(),

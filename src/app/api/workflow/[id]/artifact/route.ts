@@ -8,8 +8,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { getAppAccess } from "@/lib/infra/app-auth";
-import { resolveServeRow } from "@/lib/infra/lineage";
+import { getAppAccess } from "@/lib/auth/app-auth";
+import { resolveServeRow } from "@/lib/data/lineage";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

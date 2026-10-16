@@ -11,7 +11,7 @@
 // version as a new draft — zero LLM anywhere in this page's path.
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { safeJson } from "@/lib/infra/fetch";
+import { safeJson } from "@/lib/util/fetch";
 
 type Row = Record<string, unknown>;
 type ListSpec = { key: string; label: string; primary: string; secondary?: string[]; numeric?: string[]; noun: string };

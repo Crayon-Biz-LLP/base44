@@ -8,7 +8,7 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
 
-const { extractConsoleConfig } = await import("../src/lib/infra/studio-v2");
+const { extractConsoleConfig } = await import("../src/lib/consoles/studio-v2");
 
 const userPrompt = process.argv.slice(2).join(" ") ||
   "I run a cold storage facility. I have 12 freezer racks with 6 shelves each. I want to track which crates are stored on each shelf, what contents, and the target temperature zone.";

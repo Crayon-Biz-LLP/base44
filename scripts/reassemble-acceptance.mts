@@ -12,15 +12,15 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
 const { db } = await import("../src/db/index");
 const { workflows } = await import("../src/db/schema");
 const { desc, eq } = await import("drizzle-orm");
-import type { ChassisArchetype } from "../src/lib/infra/artifact-design";
-const { withChassis } = await import("../src/lib/infra/artifact-design");
+import type { ChassisArchetype } from "../src/lib/pipeline/artifact-design";
+const { withChassis } = await import("../src/lib/pipeline/artifact-design");
 
-const { assembleConsole } = await import("../src/lib/infra/studio-v2");
-const { assembleTargetBoard } = await import("../src/lib/infra/target-board");
-const { assemblePipeline } = await import("../src/lib/infra/pipeline");
-const { assembleLedger } = await import("../src/lib/infra/ledger");
-const { assembleTemporal } = await import("../src/lib/infra/temporal");
-const { assembleFleet } = await import("../src/lib/infra/fleet");
+const { assembleConsole } = await import("../src/lib/consoles/studio-v2");
+const { assembleTargetBoard } = await import("../src/lib/consoles/target-board");
+const { assemblePipeline } = await import("../src/lib/consoles/pipeline");
+const { assembleLedger } = await import("../src/lib/consoles/ledger");
+const { assembleTemporal } = await import("../src/lib/consoles/temporal");
+const { assembleFleet } = await import("../src/lib/consoles/fleet");
 
 type Assembler = (cfg: Record<string, unknown>) => string;
 const ASSEMBLE: Record<string, Assembler> = {

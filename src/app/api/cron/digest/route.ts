@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { events, workflows, tenants } from "@/db/schema";
 import { eq, gte, lte, and } from "drizzle-orm";
-import { translateRecords } from "@/lib/infra/translators";
+import { translateRecords } from "@/lib/pipeline/translators";
 
 type DigestColumn = { key?: string; label?: string; target?: number | string };
 type DigestSchema = { entryPersonaDimension?: string; columns?: DigestColumn[]; [k: string]: unknown };

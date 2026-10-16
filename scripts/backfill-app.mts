@@ -11,7 +11,7 @@ for (const line of readFileSync(join(process.cwd(), ".env.local"), "utf8").split
 const { db } = await import("../src/db/index");
 const { workflows } = await import("../src/db/schema");
 const { eq } = await import("drizzle-orm");
-const { enrichArtifact } = await import("../src/lib/infra/artifact");
+const { enrichArtifact } = await import("../src/lib/pipeline/artifact");
 
 async function backfill() {
   console.log("Starting deterministic backfill (no LLM)...");

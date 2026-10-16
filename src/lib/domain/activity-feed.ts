@@ -6,9 +6,9 @@
 // Actor resolution per archetype, most specific first:
 //   record-level actor (logged_by / assigned_to / owner / employee / name)
 //   → event-level filledBy → "Someone".
-import { translateRecords } from "../infra/translators";
+import { translateRecords } from "../pipeline/translators";
 import { istDay } from "./trends";
-import type { ArchetypeId } from "../infra/archetypes";
+import type { ArchetypeId } from "../pipeline/archetypes";
 
 export interface FeedEvent {
   workflowId: string;

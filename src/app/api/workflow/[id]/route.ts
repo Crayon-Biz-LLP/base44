@@ -3,11 +3,11 @@ import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { lazyUpgradeWorkflowConfig } from "@/lib/domain/upgrader";
-import { resolveServeRow } from "@/lib/infra/lineage";
-import { getAppAccess } from "@/lib/infra/app-auth";
+import { resolveServeRow } from "@/lib/data/lineage";
+import { getAppAccess } from "@/lib/auth/app-auth";
 import { upgradeConfig, upgradedConfigIsValid, CURRENT_CONFIG_VERSION } from "@/lib/domain/config-versions";
-import { parseConfig } from "@/lib/infra/assemble-registry";
-import type { ArchetypeId } from "@/lib/infra/archetypes";
+import { parseConfig } from "@/lib/pipeline/assemble-registry";
+import type { ArchetypeId } from "@/lib/pipeline/archetypes";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

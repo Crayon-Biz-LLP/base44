@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/auth/auth";
 
 export async function GET() {
   try {

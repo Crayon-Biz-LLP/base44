@@ -169,8 +169,8 @@ const SCENARIOS: { industry: string; prompt: string; expect: string; contentChec
 
 async function main() {
   console.log("=== 10-scenario one-shot acceptance suite ===\n");
-  const { pickArchetype } = await import("../src/lib/infra/archetypes");
-  const { generateConsoleForPrompt } = await import("../src/lib/infra/console-router");
+  const { pickArchetype } = await import("../src/lib/pipeline/archetypes");
+  const { generateConsoleForPrompt } = await import("../src/lib/pipeline/console-router");
   const { db } = await import("../src/db/index");
   const { tenants, workflows } = await import("../src/db/schema");
   const { eq } = await import("drizzle-orm");

@@ -7,7 +7,7 @@ import { generateWithRepair } from "./repair";
 import { z } from "zod";
 import { esc, jstr } from "./escape";
 import { logoOf } from "./branding";
-import { chromeFonts, chromeCss, icon } from "./chrome";
+import { chromeFonts, chromeCss, chromeJs, icon } from "./chrome";
 
 // Schema doctrine: structural twin of the battle-tested TargetBoardSchema —
 // scalars first, arrays last, EVERY property required (Gemini 3.x structured
@@ -280,6 +280,7 @@ ${chromeCss(cfg.dark, cfg.accentHex)}
   </div>
 </div>
 <div id="toast" class="toast"></div>
+${chromeJs({ syncLabel: 'Sync Board' })}
 <script>
 var STAGES = ${sJson};
 var SLA = ${cfg.slaDays};
@@ -292,9 +293,6 @@ var GATED = ${jstr(GATED)};
 function partsOf(t){ return USES.filter(function(u){ return u.c === t; }); }
 function billOf(t){ var s = 0; partsOf(t).forEach(function(u){ var p = PARTS.find(function(x){ return x.n === u.p; }); if (p) s += p.r * u.q; }); return s; }
 function isGated(si){ return GATED.indexOf(si) !== -1; }
-var LS_KEY = 'opsdesk_console_state';
-function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
-function loadLocal(){ try{ var r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
 function ageClass(d){ return d > SLA ? 'breach' : (d >= 3 ? 'warn' : 'ok'); }
 function render(){
   var kb = document.getElementById('kanban'); kb.innerHTML = '';
@@ -470,7 +468,6 @@ function applyEdit(){
   it.s = newStage;
   saveLocal(); render(); closeModal(); toast(ENTRY ? 'Saved ✓' : 'Saved'); PERSIST.schedule();
 }
-function toast(m){ var t = document.getElementById('toast'); t.innerText = m; t.classList.add('open'); setTimeout(function(){ t.classList.remove('open'); }, 2000); }
 var IC_ZAP = '${icon("zap", 12)}';
 function renderRail(counts, bneck){
   var rail = document.getElementById('stageRail');
@@ -483,16 +480,6 @@ function renderRail(counts, bneck){
 }
 function buildRecords(){
   return state.items.map(function(it){ return { title: it.t, stage: STAGES[it.s], owner: it.o, days_in_stage: it.d }; });
-}
-async function sync(){
-  var btn = document.getElementById('syncBtn'); btn.innerText = 'Syncing…';
-  try {
-    if (typeof window.__opsDeskSubmit__ === 'function') {
-      await window.__opsDeskSubmit__({ records: buildRecords() });
-      toast('Synced to OpsDesk');
-    } else { toast('Saved locally'); }
-  } catch (e) { toast('Sync failed'); }
-  btn.innerText = 'Sync Board';
 }
 // Engine 2: the ledger is the console's memory. Boot hydrates from the latest
 // confirmed event (applyLoaded merges server records into seeded state); every
@@ -510,35 +497,6 @@ function applyLoaded(records){
   });
   saveLocal();
 }
-var PERSIST = (function(){
-  var timer = null;
-  var dirty = false;
-  function say(msg){ var e = document.getElementById('syncState'); if (e) e.innerText = msg || ''; }
-  function schedule(){
-    dirty = true;
-    if (timer) clearTimeout(timer);
-    say('Saving…');
-    timer = setTimeout(push, 1200);
-  }
-  async function push(){
-    if (typeof window.__opsDeskSubmit__ !== 'function') { say(''); return; }
-    try { await window.__opsDeskSubmit__({ records: buildRecords() });      say(ENTRY ? 'Sent to boss ✓' : 'Synced'); setTimeout(function(){ say(''); }, 2500); }
-    catch (e) { say('Save failed'); }
-  }
-  async function hydrate(){
-    if (dirty) return; // local edits win; the pending autosave lands shortly
-    if (typeof window.__opsDeskLoad__ !== 'function') return;
-    try {
-      var res = await window.__opsDeskLoad__();
-      if (dirty) return; // edit landed while fetching — local state wins
-      if (res && res.ok){
-        if (res.role === 'staff' && (res.staffName || res.filledBy)) setEntry(res.staffName || res.filledBy); // entry mode before first paint
-        if (res.records && res.records.length){ applyLoaded(res.records); render(); say('Loaded'); setTimeout(function(){ say(''); }, 2500); }
-      }
-    } catch (e) { /* first boot / offline: keep seed */ }
-  }
-  return { schedule: schedule, hydrate: hydrate, push: push };
-})();
 function exportCsv(){
   var rows = [['title', 'stage', 'owner', 'days_in_stage']];
   state.items.forEach(function(it){ rows.push([it.t, STAGES[it.s], it.o || '', it.d]); });
@@ -546,7 +504,7 @@ function exportCsv(){
   var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'pipeline.csv'; a.click();
   toast('Exported CSV');
 }
-(function boot(){ var s = loadLocal(); if (s && s.items && s.items.length) state = s; render(); PERSIST.hydrate(); })();
+(function boot(){ var s = loadLocal(); if (s && s.items && s.items.length) state = s; render(); PERSIST.hydrate(false); })();
 </script>
 </body>
 </html>`;

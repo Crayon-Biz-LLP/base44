@@ -1,5 +1,5 @@
 // Pipeline tests: invariance across two workflows + structural checks.
-import { assemblePipeline, type PipelineConfig } from "../src/lib/infra/pipeline";
+import { assemblePipeline, type PipelineConfig } from "../src/lib/consoles/pipeline";
 
 const SHOP: PipelineConfig = {
   productName: "JobFlow Pro",

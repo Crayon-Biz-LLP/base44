@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { evaluateFormula, checkInvariant } from "@/lib/domain/math";
 import { computeEventVerdict } from "@/lib/domain/verdict";
-import { getAppAccess } from "@/lib/infra/app-auth";
+import { getAppAccess } from "@/lib/auth/app-auth";
 
 type SubmitColumn = { key?: string; label?: string; target?: number | string; targets?: Record<string, unknown>; [k: string]: unknown };
 type SubmitRow = { key?: string; id?: string; label?: string; target?: number | string; primitive?: string; [k: string]: unknown };

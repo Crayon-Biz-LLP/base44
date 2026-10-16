@@ -1,5 +1,5 @@
 // Fleet tests: invariance across two asset domains + structural checks.
-import { assembleFleet, type FleetConfig } from "../src/lib/infra/fleet";
+import { assembleFleet, type FleetConfig } from "../src/lib/consoles/fleet";
 
 const FLEET: FleetConfig = {
   productName: "FleetPulse",

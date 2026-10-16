@@ -111,3 +111,62 @@ svg.ic { vertical-align: -3px; }
 .cell:hover, .pcard:hover, .rcard:hover, .acard:hover, .tcard:hover { border-color:${hexA("88")}; }
 </style>`;
 }
+
+/**
+ * The console persistence + sync runtime — the plumbing every archetype used to
+ * hand-copy (saveLocal/loadLocal/toast/sync/PERSIST). Emitted as its own
+ * <script> BEFORE the console's own <script>, so it shares global scope with
+ * the console's hoisted hooks: `state`, `buildRecords()`, `applyLoaded()`,
+ * `render()`, `setEntry()`, `ENTRY`, and the `#syncBtn`/`#syncState` chrome.
+ * Console-supplied: only the Sync button label.
+ */
+export function chromeJs(o: { syncLabel: string }): string {
+  return `<script>
+var LS_KEY = 'opsdesk_console_state';
+function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
+function loadLocal(){ try{ var r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
+function toast(m){ var t = document.getElementById('toast'); t.innerText = m; t.classList.add('open'); setTimeout(function(){ t.classList.remove('open'); }, 2000); }
+async function sync(){
+  var btn = document.getElementById('syncBtn'); btn.innerText = 'Syncing…';
+  try {
+    if (typeof window.__opsDeskSubmit__ === 'function') {
+      await window.__opsDeskSubmit__({ records: buildRecords() });
+      toast('Synced to OpsDesk');
+    } else { toast('Saved locally'); }
+  } catch (e) { toast('Sync failed'); }
+  btn.innerText = '${o.syncLabel}';
+}
+var PERSIST = (function(){
+  var timer = null;
+  var dirty = false;
+  function say(msg){ var e = document.getElementById('syncState'); if (e) e.innerText = msg || ''; }
+  function schedule(){
+    dirty = true;
+    if (timer) clearTimeout(timer);
+    say('Saving…');
+    timer = setTimeout(push, 1200);
+  }
+  async function push(){
+    if (typeof window.__opsDeskSubmit__ !== 'function') { say(''); return; }
+    try { await window.__opsDeskSubmit__({ records: buildRecords() }); say(ENTRY ? 'Sent to boss ✓' : 'Synced'); setTimeout(function(){ say(''); }, 2500); }
+    catch (e) { say('Save failed'); }
+  }
+  async function hydrate(boot){
+    if (dirty) return; // local edits win; the pending autosave lands shortly
+    if (typeof window.__opsDeskLoad__ !== 'function') return;
+    try {
+      var res = await window.__opsDeskLoad__();
+      if (dirty) return; // edit landed while fetching — local state wins
+      if (res && res.ok){
+        if (res.role === 'staff' && (res.staffName || res.filledBy)) setEntry(res.staffName || res.filledBy); // entry mode before first paint
+        if (res.records && res.records.length){
+          applyLoaded(res.records);
+          if (!boot){ render(); say('Loaded'); setTimeout(function(){ say(''); }, 2500); }
+        }
+      }
+    } catch (e) { /* first boot / offline: keep seed */ }
+  }
+  return { schedule: schedule, hydrate: hydrate, push: push };
+})();
+</script>`;
+}

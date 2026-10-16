@@ -1,7 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
 import { NextResponse } from "next/server";
-import { generateWithRepair } from "@/lib/infra/repair";
+import { generateWithRepair } from "@/lib/consoles/repair";
 
 // The Universal Schema: Instead of hardcoding cash/upi, we allow the AI to return 
 // ANY dynamic JSON structure inside 'extracted_payload' based on the config.

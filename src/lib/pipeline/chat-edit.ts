@@ -4,7 +4,7 @@
 // extraction — nouns only, platform reassembles). Merge output is re-validated
 // by the archetype's Zod schema BEFORE anything is saved, and a malformed
 // merge fails closed (no silent partial saves).
-import { generateWithRepair } from "./repair";
+import { generateWithRepair } from "../consoles/repair";
 import { z } from "zod";
 import { ASSEMBLERS } from "./assemble-registry";
 import type { ArchetypeId } from "./archetypes";

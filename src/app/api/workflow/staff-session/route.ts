@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import { signStaffValue, staffCookieName } from "@/lib/infra/app-auth";
+import { signStaffValue, staffCookieName } from "@/lib/auth/app-auth";
 
 export async function POST(req: Request) {
   try {

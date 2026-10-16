@@ -1,7 +1,7 @@
 // Translator unit tests — the bridge between generic ledger records and
 // human-readable facts must be deterministic and exact. Fixtures mirror each
 // assembler's buildRecords() shape (keep in lockstep with the assemblers).
-import { translateRecords } from "../src/lib/infra/translators";
+import { translateRecords } from "../src/lib/pipeline/translators";
 
 let failures = 0;
 let passes = 0;

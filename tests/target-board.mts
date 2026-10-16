@@ -1,7 +1,7 @@
 // Target Board tests: invariance across two organizations — same archetype +
 // different nouns/people/metrics → byte-identical control flow once content
 // is normalized out. Plus structural checks on assembler output.
-import { assembleTargetBoard, type TargetBoardConfig } from "../src/lib/infra/target-board";
+import { assembleTargetBoard, type TargetBoardConfig } from "../src/lib/consoles/target-board";
 
 const ORG_A: TargetBoardConfig = {
   productName: "MetricFlow Pro",

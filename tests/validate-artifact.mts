@@ -6,14 +6,14 @@
 // Run: npx tsx --test --test-force-exit tests/validate-artifact.mts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateArtifact } from "../src/lib/infra/validate-artifact";
-import { assembleConsole } from "../src/lib/infra/studio-v2";
-import { assembleTargetBoard } from "../src/lib/infra/target-board";
-import { assemblePipeline } from "../src/lib/infra/pipeline";
-import { assembleLedger } from "../src/lib/infra/ledger";
-import { assembleTemporal } from "../src/lib/infra/temporal";
-import { assembleFleet } from "../src/lib/infra/fleet";
-import { withChassis } from "../src/lib/infra/artifact-design";
+import { validateArtifact } from "../src/lib/pipeline/validate-artifact";
+import { assembleConsole } from "../src/lib/consoles/studio-v2";
+import { assembleTargetBoard } from "../src/lib/consoles/target-board";
+import { assemblePipeline } from "../src/lib/consoles/pipeline";
+import { assembleLedger } from "../src/lib/consoles/ledger";
+import { assembleTemporal } from "../src/lib/consoles/temporal";
+import { assembleFleet } from "../src/lib/consoles/fleet";
+import { withChassis } from "../src/lib/pipeline/artifact-design";
 import { spatial, targetBoard, pipeline, ledger, temporal, fleet } from "../scripts/demo-fixtures";
 
 // Minimal compliant document — every fail-case below mutates exactly one thing.

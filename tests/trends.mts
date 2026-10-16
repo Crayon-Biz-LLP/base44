@@ -9,7 +9,7 @@
 // Run: npx tsx --test --test-force-exit tests/trends.mts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { translateRecords } from "../src/lib/infra/translators";
+import { translateRecords } from "../src/lib/pipeline/translators";
 import { computeConsoleTrend, istDay } from "../src/lib/domain/trends";
 import { targetBoard, ledger, temporal, spatial } from "../scripts/demo-fixtures";
 

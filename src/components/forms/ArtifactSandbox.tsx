@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { safeJson } from "@/lib/infra/fetch";
+import { safeJson } from "@/lib/util/fetch";
 
 interface ArtifactSandboxProps {
   html: string;

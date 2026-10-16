@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { events } from "@/db/schema";
 import { resolveDateRange, DashboardSpec } from "@/lib/domain/dashboard-spec";
 import { eq, and, gte, lte, type SQL } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
+import { requireOwnerTenant } from "@/lib/auth/auth";
 
 type GridRow = { row?: string; label?: string; staff?: string; target?: number | string; percent_achieved?: number; [col: string]: unknown };
 type ListItem = { key?: string; id?: string; label?: string; value?: number | string; [col: string]: unknown };

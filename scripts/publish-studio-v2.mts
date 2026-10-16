@@ -9,10 +9,10 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
 
-const { pickArchetype } = await import("../src/lib/infra/archetypes");
-const { generateConsoleForPrompt } = await import("../src/lib/infra/console-router");
-const { extractConsoleConfig } = await import("../src/lib/infra/studio-v2");
-const { extractTargetBoardConfig } = await import("../src/lib/infra/target-board");
+const { pickArchetype } = await import("../src/lib/pipeline/archetypes");
+const { generateConsoleForPrompt } = await import("../src/lib/pipeline/console-router");
+const { extractConsoleConfig } = await import("../src/lib/consoles/studio-v2");
+const { extractTargetBoardConfig } = await import("../src/lib/consoles/target-board");
 const { db } = await import("../src/db/index");
 const { tenants, workflows } = await import("../src/db/schema");
 const { eq } = await import("drizzle-orm");
@@ -44,7 +44,7 @@ try {
 
 // ARTIFACT GATE — #2, zero-LLM (Section D). The not-slop floor: a11y,
 // motion safety, self-containment. Errors block publish; warnings report.
-const { validateArtifact } = await import("../src/lib/infra/validate-artifact");
+const { validateArtifact } = await import("../src/lib/pipeline/validate-artifact");
 const v = validateArtifact(html);
 if (!v.ok) {
   console.error("  artifact gate: FAIL — console would ship broken:");

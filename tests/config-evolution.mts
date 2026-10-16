@@ -15,9 +15,9 @@ import {
   upgradeForEdit,
   upgradedConfigIsValid,
 } from "../src/lib/domain/config-versions";
-import { buildConsole, parseConfig } from "../src/lib/infra/assemble-registry";
-import { configHashOf } from "../src/lib/infra/audit";
-import type { ArchetypeId } from "../src/lib/infra/archetypes";
+import { buildConsole, parseConfig } from "../src/lib/pipeline/assemble-registry";
+import { configHashOf } from "../src/lib/data/audit";
+import type { ArchetypeId } from "../src/lib/pipeline/archetypes";
 import {
   spatial, targetBoard, pipeline, ledger, temporal, fleet, queue, checklist, roster, calendar,
 } from "../scripts/demo-fixtures";

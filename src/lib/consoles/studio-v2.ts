@@ -6,7 +6,7 @@ import { generateWithRepair } from "./repair";
 import { z } from "zod";
 import { esc, jstr } from "./escape";
 import { logoOf } from "./branding";
-import { chromeFonts, chromeCss, icon } from "./chrome";
+import { chromeFonts, chromeCss, chromeJs, icon } from "./chrome";
 import { STEEL_DEFAULT_DENSITY, AUDIT_DEFAULTS } from "./domain-knowledge";
 
 export const ConsoleConfigSchema = z.object({
@@ -310,6 +310,7 @@ ${F.tonnage ? `  <div class="kpi" style="border-left:3px solid var(--warn)"><spa
   </div>
 </div>
 <div id="toast" class="toast"></div>
+${chromeJs({ syncLabel: 'Sync Changes' })}
 <script>var CFG = { groups:${cfg.groupCount},per:${cfg.unitsPerGroup},groupLabel:${jstr(cfg.groupLabel)},countLabel:${jstr(cfg.countLabel)},cats:${catJson},
   fields:[${f.map(k => `{key:${jstr(k.key)},label:${jstr(k.label)},type:${jstr(k.type)}}`).join(",")}],qtyKey:${cfg.qtyField ? jstr(cfg.qtyField.key) : "null"} };
 var state = [], currentGroup = null, editing = null;
@@ -374,9 +375,6 @@ function openStock(i){
   document.getElementById('editF0').focus();
 }
 function densOf(v){ v=(v||'').toUpperCase(); for (var i=0;i<DENS.length;i++){ if (v.indexOf(DENS[i].m)===0) return DENS[i].d; } return ${STEEL_DEFAULT_DENSITY}; }
-var LS_KEY = 'opsdesk_console_state';
-function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
-function loadLocal(){ try{ var r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }catch(e){ return null; } }
 function catOf(u){ if(!u.v0) return null; for (var i=0;i<CFG.cats.length;i++){ if((u.v0+'').toUpperCase().indexOf(CFG.cats[i].match)===0) return CFG.cats[i]; } return CFG.cats[CFG.cats.length-1] || null; }
 function seedDemo(){
   // Deterministic, domain-realistic demo: heavy base → light top, ~25% empty,
@@ -495,7 +493,6 @@ function applyEdit(){
   if (currentGroup) openDetail(currentGroup);
   closeModal(); toast(ENTRY ? 'Saved ✓' : 'Saved'); PERSIST.schedule();
 }
-function toast(m){ var t = document.getElementById('toast'); t.innerText = m; t.classList.add('open'); setTimeout(function(){ t.classList.remove('open'); }, 2000); }
 function weightOf(u){
   var t = parseFloat(u.v2); if (!t || t <= 0) return 0;
   var kg = t * AREA * densOf(u.v0); // mm × m² × g/cm³ → kg per piece
@@ -548,16 +545,6 @@ function showView(v){
 function buildRecords(){
   return state.map(function(u){ var r = { }; r[CFG.groupLabel.toLowerCase()+'_id'] = u.g; r['slot_no'] = u.s; CFG.fields.forEach(function(fd,i){ r[fd.key] = u['v'+i]; }); ${cfg.qtyField ? "if (CFG.qtyKey) r[CFG.qtyKey] = parseInt(u.q,10) || 0;" : ""} if (u.by) r.logged_by = u.by; return r; });
 }
-async function sync(){
-  var btn = document.getElementById('syncBtn'); btn.innerText = 'Syncing…';
-  try {
-    if (typeof window.__opsDeskSubmit__ === 'function') {
-      await window.__opsDeskSubmit__({ records: buildRecords() });
-      toast('Synced to OpsDesk');
-    } else { toast('Saved locally'); }
-  } catch (e) { toast('Sync failed'); }
-  btn.innerText = 'Sync Changes';
-}
 // Engine 2: the ledger is the console's memory. Boot hydrates from the latest
 // confirmed event (applyLoaded merges server records into seeded state); every
 // edit auto-persists a full snapshot through the same submit bridge.
@@ -579,35 +566,6 @@ function applyLoaded(records){
   });
   saveLocal();
 }
-var PERSIST = (function(){
-  var timer = null;
-  var dirty = false;
-  function say(msg){ var e = document.getElementById('syncState'); if (e) e.innerText = msg || ''; }
-  function schedule(){
-    dirty = true;
-    if (timer) clearTimeout(timer);
-    say('Saving…');
-    timer = setTimeout(push, 1200);
-  }
-  async function push(){
-    if (typeof window.__opsDeskSubmit__ !== 'function') { say(''); return; }
-    try { await window.__opsDeskSubmit__({ records: buildRecords() }); say(ENTRY ? 'Sent to boss ✓' : 'Synced'); setTimeout(function(){ say(''); }, 2500); }
-    catch (e) { say('Save failed'); }
-  }
-  async function hydrate(){
-    if (dirty) return; // local edits win; the pending autosave lands shortly
-    if (typeof window.__opsDeskLoad__ !== 'function') return;
-    try {
-      var res = await window.__opsDeskLoad__();
-      if (dirty) return; // edit landed while fetching — local state wins
-      if (res && res.ok){
-        if (res.role === 'staff' && (res.staffName || res.filledBy)) setEntry(res.staffName || res.filledBy); // entry mode before first paint
-        if (res.records && res.records.length){ applyLoaded(res.records); render(); say('Loaded'); setTimeout(function(){ say(''); }, 2500); }
-      }
-    } catch (e) { /* first boot / offline: keep seed */ }
-  }
-  return { schedule: schedule, hydrate: hydrate, push: push };
-})();
 function exportCsv(){
   var rows = [[CFG.groupLabel.toLowerCase(), CFG.countLabel.toLowerCase()].concat(CFG.fields.map(function(fd){ return fd.key; })${cfg.qtyField ? `.concat([${jstr(cfg.qtyField.key)}])` : ""})];
   state.forEach(function(u){ rows.push([u.g, u.s].concat(CFG.fields.map(function(fd,i){ return u['v'+i]; })${cfg.qtyField ? ".concat([parseInt(u.q,10) || 0])" : ""})); });
@@ -619,7 +577,7 @@ function exportCsv(){
   var q = ev.target.closest('.stock-qty'); if (!q || ENTRY) return;
   openStock(parseInt(q.getAttribute('data-i'), 10));
 });
-(function boot(){ var s = loadLocal(); if (s && s.length) state = s; else seedDemo(); render(); renderStock(); PERSIST.hydrate(); })();
+(function boot(){ var s = loadLocal(); if (s && s.length) state = s; else seedDemo(); render(); renderStock(); PERSIST.hydrate(false); })();
 </script>
 </body>
 </html>`;

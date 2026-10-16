@@ -15,9 +15,9 @@ for (const line of readFileSync(".env.local", "utf8").split("\n")) {
   if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^"|"$/g, "");
 }
 
-const { pickArchetype } = await import("../src/lib/infra/archetypes");
-const { generateConsoleForPrompt } = await import("../src/lib/infra/console-router");
-const { validateArtifact } = await import("../src/lib/infra/validate-artifact");
+const { pickArchetype } = await import("../src/lib/pipeline/archetypes");
+const { generateConsoleForPrompt } = await import("../src/lib/pipeline/console-router");
+const { validateArtifact } = await import("../src/lib/pipeline/validate-artifact");
 
 const BUSINESSES: { name: string; prompt: string }[] = [
   {

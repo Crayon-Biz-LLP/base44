@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { workflows } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { requireOwnerTenant } from "@/lib/infra/auth";
-import { activateLineageHead } from "@/lib/infra/lineage";
-import { recordWorkflowChange } from "@/lib/infra/audit";
+import { requireOwnerTenant } from "@/lib/auth/auth";
+import { activateLineageHead } from "@/lib/data/lineage";
+import { recordWorkflowChange } from "@/lib/data/audit";
 
 export async function POST(req: Request) {
   try {
