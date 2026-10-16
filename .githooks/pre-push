@@ -9,7 +9,7 @@ if ! npm run lint 2>&1; then
     echo "  ❌ pre-push rejected: lint failed — see above."
     exit 1
 fi
-if ! npx tsc --noEmit 2>&1; then
+if ! npm run typecheck 2>&1; then
     echo ""
     echo "  ❌ pre-push rejected: typecheck failed — see above."
     exit 1

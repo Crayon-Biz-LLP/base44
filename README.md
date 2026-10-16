@@ -70,7 +70,7 @@ migration that has already been applied.
 | `npm run dev` | Dev server |
 | `npm run build` / `start` | Production build / serve |
 | `npm run lint` | ESLint |
-| `npx tsc --noEmit` | Typecheck |
+| `npm run typecheck` | Generate Next route types + typecheck |
 | `npm run test:unit` | Domain/unit tests (hermetic) |
 | `npm run test:zero-llm` | Console behavior tests, no model calls (hermetic) |
 | `npm run test:behavior` | Re-seed fixtures + 8 browser suites (needs dev server + DB) |
@@ -80,7 +80,7 @@ migration that has already been applied.
 
 ## Testing & the gate
 
-- **Fast, hermetic:** `npm run lint && npx tsc --noEmit && npm run test:unit && npm run test:zero-llm`.
+- **Fast, hermetic:** `npm run lint && npm run typecheck && npm run test:unit && npm run test:zero-llm`.
   This is what CI runs on every pull request.
 - **Integration** (`test:behavior`, `test:dashboards`, `test:renderer`) needs a
   running dev server and a seeded database; it runs on `main` and nightly.
