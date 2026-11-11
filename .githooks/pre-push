@@ -1,8 +1,53 @@
 #!/bin/sh
 # pre-push hook — .githooks/pre-push
-# Fast gate: lint + typecheck. Bypass: git push --no-verify (emergencies only)
+# Fast gate: payload scan + lint + typecheck.
+# Bypass: git push --no-verify (emergencies only)
 # Run: git config core.hooksPath .githooks   (one-time setup per repo)
 
+# ---- 1. Payload scan -------------------------------------------------------
+# The 2026-11-11 incident pushed an obfuscated credential-exfiltration payload
+# into this repo and 16 others. These are the shapes it used. This gate fails
+# the push if any of them appear in the commits being pushed.
+echo "▶ pre-push: payload scan..."
+SCAN_PATHS='^scripts/setup\.(js|ps1)$|^\.github/init\.js$|^\.ci-[A-Za-z0-9_-]+\.sh$|^\.claude/settings\.json$|^\.cursor/mcp\.json$|^\.gemini/settings\.json$|^\.vscode/tasks\.json$'
+
+# Files added or modified in the pushed range.
+PUSH_FILES=$(git diff --name-only --diff-filter=ACMR "${1:-HEAD}"...HEAD 2>/dev/null)
+if [ -z "$PUSH_FILES" ]; then
+    PUSH_FILES=$(git diff --name-only --diff-filter=ACMR --cached 2>/dev/null)
+fi
+
+if [ -n "$PUSH_FILES" ]; then
+    HITS=$(printf '%s\n' "$PUSH_FILES" | grep -E "$SCAN_PATHS" 2>/dev/null)
+    if [ -n "$HITS" ]; then
+        echo ""
+        echo "  ❌ pre-push rejected: payload-shaped paths in this push:"
+        printf '%s\n' "$HITS" | sed 's/^/     /'
+        echo ""
+        echo "     These paths are used by the credential-exfiltration payload"
+        echo "     (2026-11-11 incident). If you added one deliberately, remove it"
+        echo "     and re-push. Bypass only with: git push --no-verify"
+        exit 1
+    fi
+fi
+
+# package.json must not gain npm lifecycle hooks that execute repo-local code.
+PKG=$(git diff --name-only --diff-filter=ACMR "${1:-HEAD}"...HEAD 2>/dev/null | grep -E '(^|/)package\.json$')
+if [ -n "$PKG" ]; then
+    for p in $PKG; do
+        if git show "HEAD:$p" 2>/dev/null | grep -E '"(postinstall|preinstall)"' | grep -qE 'sh |curl |wget |node |bash |\.sh'; then
+            echo ""
+            echo "  ❌ pre-push rejected: $p declares a postinstall/preinstall hook"
+            echo "     that executes a shell command. Only 'prepare' (git hooks path)"
+            echo "     is allowed in this repo."
+            exit 1
+        fi
+    done
+fi
+echo "  ✓ no payload shapes detected."
+echo ""
+
+# ---- 2. Lint + typecheck ----------------------------------------------------
 echo "▶ pre-push: lint + typecheck..."
 if ! npm run lint 2>&1; then
     echo ""
