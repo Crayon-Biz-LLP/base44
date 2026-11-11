@@ -11,6 +11,9 @@ concurrency:
   group: integration-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   integration:
     name: renderer + dashboards + behavior
@@ -29,7 +32,12 @@ jobs:
           cache: npm
 
       - name: Install
-        run: npm ci
+        # --ignore-scripts: npm lifecycle scripts (postinstall/preinstall) execute
+        # attacker-controlled code from package.json. The 2026-11-11 incident ran
+        # a 1493-line exfil collector via a "postinstall" hook. This repo's only
+        # legitimate lifecycle script is "prepare" (git hooks path), which the
+        # Pre-Push gate re-establishes locally — CI does not need it.
+        run: npm ci --ignore-scripts
 
       - name: Install Chromium
         run: npx playwright-core install --with-deps chromium
