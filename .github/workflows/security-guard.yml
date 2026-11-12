@@ -1,0 +1,103 @@
+name: Security Guard
+
+# CI-side enforcement of the repository security policy. This is the control
+# that holds even when a developer hook is bypassed with --no-verify, and even
+# when a compromised token pushes directly to the remote.
+#
+# Root cause of the 2026-11-11 incident: a stolen GitHub OAuth token let an
+# attacker push an obfuscated credential-exfiltration payload into this org.
+# The payload shipped as scripts/setup.js / .github/init.js wired into
+# auto-executing agent and editor hooks, plus a "postinstall" npm lifecycle
+# hook that ran a 1493-line exfil collector on every `npm ci` in CI. Nothing
+# in CI checked for any of it.
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: payload + lifecycle-hook guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Block payload files
+        run: |
+          set -euo pipefail
+          # Paths that have no legitimate use in this repo. Presence of any of
+          # them means the change is a delivery attempt, not a feature.
+          HARD='^scripts/setup\.(js|ps1)$|^scripts/setup$|^\.github/init\.js$|^\.ci-[A-Za-z0-9_-]+\.sh$'
+          BASE='${{ github.event.pull_request.base.sha }}'
+          BEFORE='${{ github.event.before }}'
+          FILES=$(git diff --name-only --diff-filter=ACMR "${BASE:-${BEFORE:-HEAD~1}}" HEAD 2>/dev/null || true)
+          if [ -z "$FILES" ]; then
+            FILES=$(git diff --name-only --diff-filter=ACMR HEAD~1 HEAD 2>/dev/null || git ls-files)
+          fi
+          HITS=$(printf '%s\n' "$FILES" | grep -E "$HARD" || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::Blocked payload file(s) in this change:"
+            printf '%s\n' "$HITS" | sed 's/^/  - /'
+            echo "::error::These paths are used by the credential-exfiltration payload (2026-11-11 incident). Remove them and re-push."
+            exit 1
+          fi
+          echo "No payload files."
+
+      - name: Block payload commands inside agent/editor hook files
+        run: |
+          set -euo pipefail
+          # These files legitimately exist (Angular/VS Code npm tasks, etc.), so
+          # they are judged on CONTENT, not on presence.
+          HOOKS='^\.claude/settings\.json$|^\.cursor/mcp\.json$|^\.cursor/rules/setup\.mdc$|^\.gemini/settings\.json$|^\.vscode/tasks\.json$|^CLAUDE\.md$|^AGENTS\.md$'
+          BASE='${{ github.event.pull_request.base.sha }}'
+          BEFORE='${{ github.event.before }}'
+          FILES=$(git diff --name-only --diff-filter=ACMR "${BASE:-${BEFORE:-HEAD~1}}" HEAD 2>/dev/null || true)
+          [ -z "$FILES" ] && FILES=$(git ls-files)
+          BAD=0
+          for f in $(printf '%s\n' "$FILES" | grep -E "$HOOKS" || true); do
+            BODY=$(git show "HEAD:$f" 2>/dev/null || true)
+            [ -z "$BODY" ] && continue
+            if printf '%s' "$BODY" | grep -qE 'setup\.(js|ps1)|init\.js|\.ci-[A-Za-z0-9_-]+\.sh'; then
+              echo "::error::$f references the payload (setup.js / init.js / .ci-*.sh)."
+              BAD=1
+            fi
+            if printf '%s' "$BODY" | grep -qE 'curl[^|]*\|\s*(bash|sh)|wget[^|]*\|\s*(bash|sh)|-WindowStyle\s+Hidden'; then
+              echo "::error::$f contains a remote-fetch-to-shell pattern."
+              BAD=1
+            fi
+          done
+          [ "$BAD" = "0" ] || exit 1
+          echo "No payload commands in hook files."
+
+      - name: Block npm lifecycle hooks that execute shell commands
+        run: |
+          set -euo pipefail
+          BAD=0
+          for f in $(git ls-files '**/package.json' 'package.json' 2>/dev/null | sort -u); do
+            if git show "HEAD:$f" 2>/dev/null | grep -E '"(postinstall|preinstall)"' | grep -qE 'sh |curl |wget |node |bash |\.sh|\.py'; then
+              echo "::error::$f declares a postinstall/preinstall hook that executes a command. Only 'prepare' (git hooks path) is allowed."
+              BAD=1
+            fi
+          done
+          [ "$BAD" = "0" ] || exit 1
+          echo "No shell-executing npm lifecycle hooks."
+
+      - name: Require least-privilege permissions in workflows
+        run: |
+          set -euo pipefail
+          BAD=0
+          for f in $(git ls-files '.github/workflows/*.yml' '.github/workflows/*.yaml' 2>/dev/null | sort -u); do
+            if ! git show "HEAD:$f" 2>/dev/null | grep -qE '^\s*permissions:'; then
+              echo "::error::$f has no permissions: block. Declare 'permissions: contents: read' (or narrower). The default token has write access to contents and statuses, which is what the payload's status-forgery relied on."
+              BAD=1
+            fi
+          done
+          [ "$BAD" = "0" ] || exit 1
+          echo "All workflows declare permissions."
